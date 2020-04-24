@@ -17,12 +17,18 @@ public class TricklerTest {
         public Response serve(IHTTPSession session) {
             switch (session.getUri()) {
                 case "/robots.txt":
-                    return newFixedLengthResponse("Sitemap: /sitemap-index.xml\ncrawl-delay: 5\n");
+                    Response response = newFixedLengthResponse(Response.Status.OK, "text/plain",
+                            "Sitemap: /sitemap-index.xml\ncrawl-delay: 5\n");
+                    response.addHeader("Etag", "\"123\"");
+                    response.addHeader("Last-Modified", "Wed, 21 Oct 2015 07:28:00 GMT");
+                    return response;
                 case "/sitemap-index.xml":
-                    return newFixedLengthResponse("<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
+                    return newFixedLengthResponse(Response.Status.OK, "application/xml",
+                            "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
                             "<sitemap><loc>/sitemap.xml</loc></sitemap></sitemapindex>");
                 case "/sitemap.xml":
-                    return newFixedLengthResponse("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
+                    return newFixedLengthResponse(Response.Status.OK, "application/xml",
+                            "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
                             "<url><loc>/page</loc><changefreq>daily</changefreq><priority>0.8</priority></url></urlset>");
                 default:
                     return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "404 Not found");
@@ -47,8 +53,9 @@ public class TricklerTest {
 
     @Test
     public void test() throws IOException {
-        try (Trickler trickler = new Trickler()) {
-//        try (Trickler trickler = new Trickler(new Database("jdbc:h2:mem:test;MODE=MySQL;DATABASE_TO_LOWER=TRUE", "", ""))) {
+        Database db = new Database("jdbc:h2:file:./data/testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE", "sa", "");
+        db.init();
+        try (Trickler trickler = new Trickler(db)) {
             trickler.addSeed("http://localhost:1234/");
             trickler.step();
             trickler.step();

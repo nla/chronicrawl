@@ -12,7 +12,9 @@ import java.io.InputStreamReader;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -28,13 +30,17 @@ public class Database implements AutoCloseable {
 
     Database(String url, String user, String password) {
         jdbcPool = JdbcConnectionPool.create(url, user, password);
+        init();
+        fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
+        query = fluent.query();
+    }
+
+    void init() {
         try (Connection connection = jdbcPool.getConnection()) {
             RunScript.execute(connection, new InputStreamReader(getClass().getResourceAsStream("schema.sql"), UTF_8));
         } catch (SQLException e) {
             throw new RuntimeException("Unable to initialize db", e);
         }
-        fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
-        query = fluent.query();
     }
 
     @Override
@@ -58,15 +64,17 @@ public class Database implements AutoCloseable {
     }
 
     public Location selectNextLocation(long originId) {
-        return query.select("SELECT url, type FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, next_visit ASC LIMIT 1")
+        return query.select("SELECT url, type, etag, last_modified FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 1")
                 .params(Instant.now(), originId)
                 .firstResult(rs -> new Location(new Url(rs.getString("url")),
-                        LocationType.valueOf(rs.getString("type"))))
+                        LocationType.valueOf(rs.getString("type")),
+                        rs.getString("etag"),
+                        getInstant(rs, "last_modified")))
                 .orElse(null);
     }
 
-    public void updateLocationVisit(long id, Instant lastVisit, Instant nextVisit) {
-        check(query.update("UPDATE location SET next_visit = ?, last_visit = ? WHERE id = ?").params(nextVisit, lastVisit, id).run());
+    public void updateLocationVisit(long id, Instant lastVisit, Instant nextVisit, String etag, Instant lastModified) {
+        check(query.update("UPDATE location SET next_visit = ?, last_visit = ?, etag = ?, last_modified = ? WHERE id = ?").params(nextVisit, lastVisit, etag, lastModified, id).run());
     }
 
     public void updateOriginVisit(long originId, Instant lastVisit, Instant nextVisit) {
@@ -96,4 +104,21 @@ public class Database implements AutoCloseable {
         return rs.wasNull() ? null : value;
     }
 
+    public static Instant getInstant(ResultSet rs, String field) throws SQLException {
+        Timestamp value = rs.getTimestamp(field);
+        return value == null ? null : value.toInstant();
+    }
+
+    public void insertRecord(UUID id, long position) {
+        query.update("INSERT INTO record (id, position) VALUES (?, ?)").params(id, position).run();
+    }
+
+    public void insertSnapshot(long locationId, Instant date, int status, Long contentLength, String contentType, UUID requestId, UUID responseId) {
+        query.update("INSERT INTO snapshot (location_id, date, status, content_length, content_type, request_id, response_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                .params(locationId, date, status, contentLength, contentType, requestId, responseId).run();
+    }
+
+    public void tryInsertLink(long src, long dst) {
+        query.update("INSERT IGNORE INTO link (src, dst) VALUES (?, ?)").params(src, dst).run();
+    }
 }

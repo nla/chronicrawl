@@ -75,7 +75,7 @@ public class Url {
     }
 
     public int port() {
-        return parsed.getPort() != null ? Integer.parseInt(parsed.getPort()) : -1;
+        return !parsed.getPort().isBlank() ? Integer.parseInt(parsed.getPort()) : -1;
     }
 
     public String target() {

@@ -46,9 +46,13 @@ public class Trickler implements Closeable {
         }
     }
 
-    public static void main(String args[]) throws IOException {
+    public static void main(String args[]) throws IOException, InterruptedException {
         try (Trickler trickler = new Trickler()) {
-            trickler.addSeed("http://localhost/");
+            trickler.addSeed(args[0]);
+            while (true) {
+                trickler.step();
+                Thread.sleep(1000);
+            }
         }
     }
 

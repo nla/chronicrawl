@@ -26,16 +26,13 @@ public class Sitemap {
     public static void parse(InputStream stream, Consumer<Entry> consumer) throws XMLStreamException {
         XMLStreamReader reader = xmlInputFactory.createXMLStreamReader(stream);
         try {
-            while (reader.hasNext()) {
-                int event = reader.next();
-                if (event == XMLStreamReader.START_ELEMENT) {
-                    if (reader.getLocalName().equals("urlset")) {
-                        parseUrlsetTag(reader, consumer);
-                    } else if (reader.getLocalName().equals("sitemapindex")) {
-                        parseSitemapIndextag(reader, consumer);
-                    } else {
-                        throw new XMLStreamException("Invalid sitemap. Expected urlset or sitemapindex element");
-                    }
+            if (reader.nextTag() == START_ELEMENT) {
+                if (reader.getLocalName().equals("urlset")) {
+                    parseUrlsetTag(reader, consumer);
+                } else if (reader.getLocalName().equals("sitemapindex")) {
+                    parseSitemapIndextag(reader, consumer);
+                } else {
+                    throw new XMLStreamException("Invalid sitemap. Expected urlset or sitemapindex element");
                 }
             }
         } finally {

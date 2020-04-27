@@ -64,7 +64,13 @@ public class Browser implements Closeable {
                     if (message.has("sessionId")) {
                         var handler = sessionEventHandlers.get(message.getString("sessionId"));
                         if (handler != null) {
-                            ForkJoinPool.commonPool().submit(() -> handler.accept(message));
+                            ForkJoinPool.commonPool().submit(() -> {
+                                try {
+                                    handler.accept(message);
+                                } catch (Throwable t) {
+                                    log.error("Exception handling browser event " + rawMessage, t);
+                                }
+                            });
                         } else {
                             log.warn("Event for unknown session {}", rawMessage);
                         }

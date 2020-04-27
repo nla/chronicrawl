@@ -47,6 +47,11 @@ public class PausedRequest {
         tab.call("Fetch.continueRequest", Map.of("requestId", id));
     }
 
+    public void fail(String errorReason) {
+        enforceHandledOnce();
+        tab.call("Fetch.failRequest", Map.of("requestId", id, "errorReason", errorReason));
+    }
+
     private void enforceHandledOnce() {
         if (handled) {
             throw new IllegalStateException("Request already handled");
@@ -63,4 +68,5 @@ public class PausedRequest {
                 ", headers=" + headers() +
                 '}';
     }
+
 }

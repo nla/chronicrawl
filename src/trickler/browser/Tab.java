@@ -34,7 +34,14 @@ public class Tab implements Closeable {
             case "Fetch.requestPaused":
                 PausedRequest request = new PausedRequest(this, params.getString("requestId"), params.getObject("request"));
                 if (requestInterceptor != null) {
-                    requestInterceptor.onRequestPaused(request);
+                    try {
+                        requestInterceptor.onRequestPaused(request);
+                    } catch (Throwable t) {
+                        if (!request.handled) {
+                            request.fail("Failed");
+                        }
+                        throw t;
+                    }
                 }
                 if (!request.handled) {
                     request.continueNormally();

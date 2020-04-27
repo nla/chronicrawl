@@ -1,6 +1,8 @@
 package trickler;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import crawlercommons.robots.SimpleRobotRules;
+import crawlercommons.robots.SimpleRobotRulesParser;
 import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,11 +26,12 @@ import static java.nio.file.StandardOpenOption.*;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 
 public class Exchange {
+    public static final int STATUS_ROBOTS_DISALLOWED = -9998;
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
-    private final Database db;
-    private final WarcWriter warcWriter;
+    private final Trickler crawl;
     private final Origin origin;
     private final Location location;
+    private final Location via;
     private final FileChannel bufferFile;
     private final Instant date = Instant.now();
     private final Url url;
@@ -36,29 +39,39 @@ public class Exchange {
     private HttpRequest httpRequest;
     private HttpResponse httpResponse;
     private InetAddress ip;
+    private Long requestOffset;
+    private Long responseOffset;
+    private int fetchStatus;
 
-    public Exchange(Origin origin, Location location, Database db, WarcWriter warcWriter) throws IOException {
+    public Exchange(Trickler crawl, Origin origin, Location location) throws IOException {
+        this.crawl = crawl;
         this.origin = origin;
         this.location = location;
-        this.db = db;
-        this.warcWriter = warcWriter;
         Path tempFile = Files.createTempFile("trickler", ".tmp");
         bufferFile = FileChannel.open(tempFile, READ, WRITE, DELETE_ON_CLOSE, TRUNCATE_EXISTING);
         url = location.url();
+        this.via = location.via == null ? null : crawl.db.selectLocationById(location.via);
     }
 
     public void run() throws IOException {
-        prepare();
-        fetch();
-        process();
-        save();
+        if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url().toString())) {
+            fetch();
+            process();
+            save();
+        } else {
+            fetchStatus = STATUS_ROBOTS_DISALLOWED;
+        }
         finish();
     }
 
-    void prepare() {
+    private SimpleRobotRules parseRobots(String url, byte[] robotsTxt) {
+        return new SimpleRobotRulesParser(Short.MAX_VALUE, 5).parseContent(url, robotsTxt, "text/plain", crawl.config.userAgent);
+    }
+
+    void fetch() throws IOException {
         HttpRequest.Builder builder = new HttpRequest.Builder("GET", url.target())
                 .addHeader("Host", url.hostInfo())
-                .addHeader("User-Agent", "trickler")
+                .addHeader("User-Agent", crawl.config.userAgent)
                 .addHeader("Connection", "close")
                 .version(MessageVersion.HTTP_1_0);
         if (location.etag() != null) {
@@ -67,10 +80,10 @@ public class Exchange {
         if (location.lastModified() != null) {
             builder.addHeader("If-Modified-Since", RFC_1123_DATE_TIME.format(location.lastModified()));
         }
+        if (via != null) {
+            builder.addHeader("Referer", via.url().toString());
+        }
         httpRequest = builder.build();
-    }
-
-    void fetch() throws IOException {
         try (Socket socket = url.connect()) {
             ip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getAddress();
             socket.getOutputStream().write(httpRequest.serializeHeader());
@@ -78,12 +91,13 @@ public class Exchange {
         } finally {
             fetchCompleteTime = Instant.now();
         }
+        bufferFile.position(0);
+        httpResponse = HttpResponse.parse(LengthedBody.create(bufferFile, ByteBuffer.allocate(8192).flip(), bufferFile.size()));
+        fetchStatus = httpResponse.status();
     }
 
-    private void process() throws IOException {
+    private void process() {
         try {
-            bufferFile.position(0);
-            httpResponse = HttpResponse.parse(LengthedBody.create(bufferFile, ByteBuffer.allocate(8192).flip(), bufferFile.size()));
             if (hadSuccessStatus()) {
                 switch (location.type()) {
                     case ROBOTS:
@@ -92,6 +106,9 @@ public class Exchange {
                     case SITEMAP:
                         processSitemap();
                         break;
+                    case PAGE:
+                        processPage();
+                        break;
                 }
             }
         } catch (Exception e) {
@@ -99,75 +116,86 @@ public class Exchange {
         }
     }
 
+    private void processPage() {
+
+    }
+
     private void processRobots() throws IOException {
-        Robots robots = new Robots(httpResponse.body().stream());
-//
-//        Robots.parse(httpResponse.body().stream(), new Robots.Handler() {
-//            public void crawlDelay(long crawlDelay) {
-//                if (crawlDelay >= 0 && crawlDelay < Short.MAX_VALUE) {
-//                    db.updateOriginRobotsCrawlDelay(location.url().originId(), (short)crawlDelay);
-//                }
-//            }
-//            public void sitemap(String url) {
-//                enqueue(location.url().resolve(url), LocationType.SITEMAP, 2);
-//            }
-//        });
+        byte[] content = httpResponse.body().stream().readNBytes(crawl.config.maxRobotsBytes);
+        SimpleRobotRules rules = parseRobots(location.url().toString(), content);
+        Short crawlDelay = null;
+        if (rules.getCrawlDelay() > 0) {
+            crawlDelay = (short)rules.getCrawlDelay();
+        }
+        System.out.println("robots " + rules.getSitemaps());
+        for (String sitemapUrl : rules.getSitemaps()) {
+            enqueue(location.url().resolve(sitemapUrl), LocationType.SITEMAP, 2);
+        }
+        crawl.db.updateOriginRobots(location.url().originId(), crawlDelay, content);
     }
 
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
             Url url = location.url().resolve(entry.loc);
             enqueue(url, entry.type, entry.type == LocationType.SITEMAP ? 3 : 10);
-            db.updateLocationSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
+            crawl.db.updateLocationSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
     }
 
     private void enqueue(Url targetUrl, LocationType type, int priority) {
-        db.tryInsertLocation(targetUrl, type, location.url().id(), date, priority);
-        db.tryInsertLink(location.url().id(), targetUrl.id());
+        crawl.db.tryInsertLocation(targetUrl, type, location.url().id(), date, priority);
+        crawl.db.tryInsertLink(location.url().id(), targetUrl.id());
     }
 
     void save() throws IOException {
-        bufferFile.position(0);
-        UUID requestId = UuidCreator.getTimeOrdered();
-        WarcRequest request = new WarcRequest.Builder(url.toURI())
-                .recordId(requestId)
-                .date(date)
-                .body(httpRequest)
-                .ipAddress(ip)
-                .build();
-        UUID responseId = UuidCreator.getTimeOrdered();
-        WarcResponse response = new WarcResponse.Builder(url.toURI())
-                .recordId(responseId)
-                .date(date)
-                .body(MediaType.HTTP_RESPONSE, bufferFile, bufferFile.size())
-                .concurrentTo(request.id())
-                .ipAddress(ip)
-                .build();
+        if (httpRequest != null) {
+            UUID requestId = UuidCreator.getTimeOrdered();
+            WarcRequest request = new WarcRequest.Builder(url.toURI())
+                    .recordId(requestId)
+                    .date(date)
+                    .body(httpRequest)
+                    .ipAddress(ip)
+                    .build();
+            this.requestOffset = crawl.warcWriter.position();
+            crawl.warcWriter.write(request);
 
-        long requestPosition = warcWriter.position();
-        warcWriter.write(request);
-
-        long responsePosition = warcWriter.position();
-        warcWriter.write(response);
-
-        db.insertRecord(requestId, requestPosition);
-        db.insertRecord(responseId, responsePosition);
-        db.insertSnapshot(url.id(), date, httpResponse.status(), contentLength(),
-                httpResponse.contentType().base().toString(), requestId, responseId);
-    }
-
-    private Long contentLength() {
-        return httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
+            if (httpResponse != null) {
+                bufferFile.position(0);
+                UUID responseId = UuidCreator.getTimeOrdered();
+                WarcResponse response = new WarcResponse.Builder(url.toURI())
+                        .recordId(responseId)
+                        .date(date)
+                        .body(MediaType.HTTP_RESPONSE, bufferFile, bufferFile.size())
+                        .concurrentTo(request.id())
+                        .ipAddress(ip)
+                        .build();
+                this.responseOffset = crawl.warcWriter.position();
+                crawl.warcWriter.write(response);
+            }
+        }
     }
 
     private void finish() {
-        db.updateOriginVisit(origin.id(), date, origin.calculateNextVisit(date));
-        db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)), etag(), lastModified());
+        String contentType = httpResponse == null ? null : httpResponse.contentType().base().toString();
+        Long contentLength = httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
+
+        crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
+        crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)), etag(), lastModified());
+        crawl.db.insertVisit(url.id(), date, httpResponse.status(), contentLength, contentType, requestOffset, responseOffset);
+        System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
+                location.url(), location.type(), via != null ? via.url() : "-", contentType != null ? contentType : "-");
+        System.out.flush();
+    }
+
+    private long calcDelayMillis() {
+        if (fetchStatus == STATUS_ROBOTS_DISALLOWED) return 0;
+        long delay = origin.robotsCrawlDelay != null ? origin.robotsCrawlDelay * 1000 : 5000;
+        if (delay > crawl.config.maxDelayMillis) delay = crawl.config.maxDelayMillis;
+        return delay;
     }
 
     private boolean hadSuccessStatus() {
-        return httpResponse.status() >= 200 && httpResponse.status() <= 299;
+        return fetchStatus >= 200 && fetchStatus <= 299;
     }
 
     private String etag() {

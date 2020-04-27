@@ -9,12 +9,14 @@ public class Location {
     private final LocationType type;
     private final String etag;
     private final Instant lastModified;
+    final Long via;
 
-    public Location(Url url, LocationType type, String etag, Instant lastModified) {
+    public Location(Url url, LocationType type, String etag, Instant lastModified, Long via) {
         this.url = requireNonNull(url, "url");
         this.type = requireNonNull(type, "type");
         this.etag = etag;
         this.lastModified = lastModified;
+        this.via = via;
     }
 
     public Url url() {

@@ -1,4 +1,4 @@
-package trickler;
+package trickler.browser;
 
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -17,6 +17,7 @@ import java.net.URI;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
@@ -26,15 +27,24 @@ public class Browser implements Closeable {
     private final Process process;
     private final WebSocket websocket;
     private final AtomicLong idSeq = new AtomicLong(0);
+    public ConcurrentHashMap<String, Consumer<JsonObject>> sessionEventHandlers = new ConcurrentHashMap<>();
     private Map<Long, CompletableFuture<JsonObject>> calls = new ConcurrentHashMap<>();
 
     public Browser() throws IOException {
-        process = new ProcessBuilder("chromium", "--headless", "--remote-debugging-port=0",
-                "--enable-logging=stderr", "--v=1")
+        process = new ProcessBuilder("chromium", "--headless", "--remote-debugging-port=0"
+//                , "--enable-logging=stderr", "--v=1"
+        )
                 .inheritIO()
                 .redirectError(ProcessBuilder.Redirect.PIPE)
                 .start();
-        websocket = new WebSocket(URI.create(readDevtoolsUrlFromStderr()));
+        String url = readDevtoolsUrlFromStderr();
+        log.trace("Connecting to {}", url);
+        websocket = new WebSocket(URI.create(url));
+        try {
+            websocket.connectBlocking();
+        } catch (InterruptedException e) {
+            throw new IOException("Connect interrupted", e);
+        }
     }
 
     private class WebSocket extends WebSocketClient {
@@ -43,14 +53,22 @@ public class Browser implements Closeable {
         }
 
         public void onOpen(ServerHandshake handshakeData) {
-
+            log.trace("Connected");
         }
+
         public void onMessage(String rawMessage) {
-            System.out.println(rawMessage);
+            log.trace("< {}", rawMessage);
             try {
                 var message = JsonParser.object().from(rawMessage);
                 if (message.has("method")) {
-
+                    if (message.has("sessionId")) {
+                        var handler = sessionEventHandlers.get(message.getString("sessionId"));
+                        if (handler != null) {
+                            ForkJoinPool.commonPool().submit(() -> handler.accept(message));
+                        } else {
+                            log.warn("Event for unknown session {}", rawMessage);
+                        }
+                    }
                 } else {
                     long id = message.getLong("id");
                     CompletableFuture<JsonObject> future = calls.remove(id);
@@ -65,6 +83,9 @@ public class Browser implements Closeable {
             } catch (JsonParserException e) {
                 log.debug("Received message: {}", rawMessage);
                 log.warn("Error parsing devtools message", e);
+            } catch (Throwable e) {
+                log.error("Exception handling message", e);
+                throw e;
             }
         }
         public void onClose(int code, String reason, boolean remote) {
@@ -75,21 +96,29 @@ public class Browser implements Closeable {
         }
     }
 
-    public JsonObject call(String method, Map<String, Object> params) {
+    JsonObject call(String method, Map<String, Object> params) {
+        return call(null, method, params);
+    }
+
+    JsonObject call(String sessionId, String method, Map<String, Object> params) {
         long id = idSeq.incrementAndGet();
         String message = JsonWriter.string().object()
                 .value("id", id)
+                .value("sessionId", sessionId)
                 .value("method", method)
                 .object("params", params)
                 .end()
                 .done();
+        log.trace("> {}", message.length() < 1024 ? message : message.substring(0, 1024) + "...");
         var future = new CompletableFuture<JsonObject>();
         calls.put(id, future);
         websocket.send(message);
         try {
             return future.get(10, TimeUnit.SECONDS);
-        } catch (InterruptedException | TimeoutException e) {
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            throw new RuntimeException("Call timed out: " + message, e);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException) {
                 throw (RuntimeException)e.getCause();
@@ -135,9 +164,10 @@ public class Browser implements Closeable {
     }
 
     public void close() throws IOException {
+        websocket.close();
         process.destroy();
         try {
-            process.waitFor(2, TimeUnit.SECONDS);
+            process.waitFor(1, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             throw new IOException(e);
         } finally {
@@ -145,10 +175,13 @@ public class Browser implements Closeable {
         }
     }
 
+    public Tab createTab() {
+        return new Tab(this);
+    }
+
     public static void main(String[] args) throws IOException, InterruptedException {
         try (Browser browser = new Browser()) {
             Thread.sleep(3000);
         }
     }
-
 }

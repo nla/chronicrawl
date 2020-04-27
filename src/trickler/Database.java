@@ -3,6 +3,7 @@ package trickler;
 import org.codejargon.fluentjdbc.api.FluentJdbc;
 import org.codejargon.fluentjdbc.api.FluentJdbcBuilder;
 import org.codejargon.fluentjdbc.api.mapper.ObjectMappers;
+import org.codejargon.fluentjdbc.api.query.Mapper;
 import org.codejargon.fluentjdbc.api.query.Query;
 import org.codejargon.fluentjdbc.api.query.UpdateResult;
 import org.h2.jdbcx.JdbcConnectionPool;
@@ -23,6 +24,13 @@ public class Database implements AutoCloseable {
     private final FluentJdbc fluent;
     private final Query query;
     private final ObjectMappers objectMappers = ObjectMappers.builder().build();
+
+    private final static String locationFields = "url, type, etag, last_modified, via";
+    private final static Mapper<Location> locationMapper = rs -> new Location(new Url(rs.getString("url")),
+            LocationType.valueOf(rs.getString("type")),
+            rs.getString("etag"),
+            getInstant(rs, "last_modified"),
+            getLongOrNull(rs, "via"));
 
     Database() {
         this("jdbc:h2:file:./data/db;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE", "sa", "");
@@ -64,12 +72,16 @@ public class Database implements AutoCloseable {
     }
 
     public Location selectNextLocation(long originId) {
-        return query.select("SELECT url, type, etag, last_modified FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 1")
+        return query.select("SELECT " + locationFields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 1")
                 .params(Instant.now(), originId)
-                .firstResult(rs -> new Location(new Url(rs.getString("url")),
-                        LocationType.valueOf(rs.getString("type")),
-                        rs.getString("etag"),
-                        getInstant(rs, "last_modified")))
+                .firstResult(locationMapper)
+                .orElse(null);
+    }
+
+    public Location selectLocationById(long locationId) {
+        return query.select("SELECT " + locationFields + " FROM location WHERE id = ? LIMIT 1")
+                .params(locationId)
+                .firstResult(locationMapper)
                 .orElse(null);
     }
 
@@ -87,16 +99,18 @@ public class Database implements AutoCloseable {
         }
     }
 
-    public void updateOriginRobotsCrawlDelay(long originId, Short crawlDelay) {
-        check(query.update("UPDATE origin SET robots_crawl_delay = ? WHERE id = ?").params(crawlDelay, originId).run());
+    public void updateOriginRobots(long originId, Short crawlDelay, byte[] robotsTxt) {
+        check(query.update("UPDATE origin SET robots_crawl_delay = ?, robots_txt = ? WHERE id = ?")
+                .params(crawlDelay, robotsTxt, originId).run());
     }
 
     public Origin selectNextOrigin() {
-        return query.select("SELECT id, name, robots_crawl_delay, next_visit FROM origin ORDER BY next_visit ASC LIMIT 1")
+        return query.select("SELECT id, name, robots_crawl_delay, next_visit, robots_txt FROM origin ORDER BY next_visit ASC LIMIT 1")
                 .firstResult(rs -> new Origin(rs.getLong("id"),
                         rs.getString("name"),
                         getLongOrNull(rs, "robots_crawl_delay"),
-                        rs.getTimestamp("next_visit").toInstant())).orElse(null);
+                        rs.getTimestamp("next_visit").toInstant(),
+                        rs.getBytes("robots_txt"))).orElse(null);
     }
 
     public static Long getLongOrNull(ResultSet rs, String field) throws SQLException {
@@ -113,9 +127,9 @@ public class Database implements AutoCloseable {
         query.update("INSERT INTO record (id, position) VALUES (?, ?)").params(id, position).run();
     }
 
-    public void insertSnapshot(long locationId, Instant date, int status, Long contentLength, String contentType, UUID requestId, UUID responseId) {
-        query.update("INSERT INTO snapshot (location_id, date, status, content_length, content_type, request_id, response_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                .params(locationId, date, status, contentLength, contentType, requestId, responseId).run();
+    public void insertVisit(long locationId, Instant date, int status, Long contentLength, String contentType, Long requestOffset, Long responseOffset) {
+        query.update("INSERT INTO visit (location_id, date, status, content_length, content_type, request_offset, response_offset) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                .params(locationId, date, status, contentLength, contentType, requestOffset, responseOffset).run();
     }
 
     public void tryInsertLink(long src, long dst) {

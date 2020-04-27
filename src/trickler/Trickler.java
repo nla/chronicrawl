@@ -14,14 +14,16 @@ import static java.nio.file.StandardOpenOption.*;
 
 public class Trickler implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Trickler.class);
-    private final Database db;
-    private final WarcWriter warcWriter;
+    final Config config;
+    final Database db;
+    final WarcWriter warcWriter;
 
     public Trickler() throws IOException {
-        this(new Database());
+        this(new Config(), new Database());
     }
 
-    public Trickler(Database db) throws IOException {
+    public Trickler(Config config, Database db) throws IOException {
+        this.config = config;
         this.db = db;
         warcWriter = new WarcWriter(FileChannel.open(Paths.get("data/output.warc.gz"), WRITE, CREATE, APPEND));
     }
@@ -34,7 +36,6 @@ public class Trickler implements Closeable {
         }
         db.tryInsertLocation(crawlUrl, LocationType.PAGE, 0, now, 10);
     }
-
 
     @Override
     public void close() {
@@ -63,16 +64,16 @@ public class Trickler implements Closeable {
             return;
         }
         Instant now = Instant.now();
-        if (origin.nextVisit().isAfter(now)) {
+        if (origin.nextVisit.isAfter(now)) {
             try {
-                Thread.sleep(Duration.between(now, origin.nextVisit()).toMillis());
+                Thread.sleep(Duration.between(now, origin.nextVisit).toMillis());
             } catch (InterruptedException e) {
                 e.printStackTrace();
                 return;
             }
         }
-        Location location = db.selectNextLocation(origin.id());
-        Exchange exchange = new Exchange(origin, location, db, warcWriter);
+        Location location = db.selectNextLocation(origin.id);
+        Exchange exchange = new Exchange(this, origin, location);
         exchange.run();
     }
 

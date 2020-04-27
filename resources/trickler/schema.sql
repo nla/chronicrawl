@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS link;
+DROP TABLE IF EXISTS visit;
 DROP TABLE IF EXISTS snapshot;
 DROP TABLE IF EXISTS location;
 DROP TABLE IF EXISTS origin;
@@ -11,7 +12,8 @@ CREATE TABLE origin
     discovered         TIMESTAMP NOT NULL,
     last_visit         TIMESTAMP,
     next_visit         TIMESTAMP,
-    robots_crawl_delay SMALLINT
+    robots_crawl_delay SMALLINT,
+    robots_txt         BLOB
 );
 
 CREATE TABLE location
@@ -33,25 +35,17 @@ CREATE TABLE location
     FOREIGN KEY (origin_id) REFERENCES origin (id) ON DELETE CASCADE
 );
 
-CREATE TABLE record
+CREATE TABLE visit
 (
-    id       UUID   NOT NULL PRIMARY KEY,
-    position BIGINT NOT NULL
-);
-
-CREATE TABLE snapshot
-(
-    location_id    BIGINT    NOT NULL,
-    date           TIMESTAMP NOT NULL,
-    status         SMALLINT  NOT NULL,
-    content_type   TEXT      NULL,
-    content_length BIGINT    NULL,
-    request_id     UUID      NOT NULL,
-    response_id    UUID      NOT NULL,
+    location_id     BIGINT    NOT NULL,
+    date            TIMESTAMP NOT NULL,
+    status          SMALLINT  NOT NULL,
+    content_type    TEXT      NULL,
+    content_length  BIGINT    NULL,
+    request_offset  BIGINT    NULL,
+    response_offset BIGINT    NULL,
     PRIMARY KEY (location_id, date),
-    FOREIGN KEY (location_id) REFERENCES location (id) ON DELETE CASCADE,
-    FOREIGN KEY (request_id) REFERENCES record (id) ON DELETE SET NULL,
-    FOREIGN KEY (response_id) REFERENCES record (id) ON DELETE SET NULL
+    FOREIGN KEY (location_id) REFERENCES location (id) ON DELETE CASCADE
 );
 
 CREATE TABLE link

@@ -5,7 +5,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.InterruptedIOException;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /**
@@ -17,12 +20,14 @@ public class Tab implements Closeable {
     private final String targetId;
     private final String sessionId;
     private Consumer<PausedRequest> requestInterceptor;
+    private CompletableFuture<Double> loadFuture;
 
     Tab(Browser browser) {
         this.browser = browser;
         targetId = browser.call("Target.createTarget",  Map.of("url", "about:blank")).getString("targetId");
         sessionId = browser.call("Target.attachToTarget", Map.of("targetId", targetId, "flatten", true)).getString("sessionId");
         browser.sessionEventHandlers.put(sessionId, this::handleEvent);
+        call("Page.enable", Map.of()); // for loadEventFired
     }
 
     JsonObject call(String method, Map<String, Object> params) {
@@ -48,8 +53,11 @@ public class Tab implements Closeable {
                     request.continueNormally();
                 }
                 break;
+            case "Page.loadEventFired":
+                loadFuture.complete(params.getDouble("timestamp"));
+                break;
             default:
-                log.warn("Unhandled event {}", event);
+                log.debug("Unhandled event {}", event);
                 break;
         }
     }
@@ -65,7 +73,12 @@ public class Tab implements Closeable {
         call("Fetch.enable", Map.of());
     }
 
-    public void navigate(String url) {
+    public Future<Double> navigate(String url) {
+        if (loadFuture != null) {
+            loadFuture.completeExceptionally(new InterruptedIOException("navigated away"));
+        }
+        loadFuture = new CompletableFuture<>();
         call("Page.navigate", Map.of("url", url));
+        return loadFuture;
     }
 }

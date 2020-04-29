@@ -16,6 +16,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -28,7 +30,7 @@ public class Database implements AutoCloseable {
 
     private final static String locationFields = "url, type, etag, last_modified, via";
     private final static Mapper<Location> locationMapper = rs -> new Location(new Url(rs.getString("url")),
-            LocationType.valueOf(rs.getString("type")),
+            Location.Type.valueOf(rs.getString("type")),
             rs.getString("etag"),
             getInstant(rs, "last_modified"),
             getLongOrNull(rs, "via"));
@@ -36,7 +38,7 @@ public class Database implements AutoCloseable {
     private final static Mapper<Origin> originMapper = rs -> new Origin(rs.getLong("id"),
             rs.getString("name"),
             getLongOrNull(rs, "robots_crawl_delay"),
-            rs.getTimestamp("next_visit").toInstant(),
+            getInstant(rs, "next_visit"),
             rs.getBytes("robots_txt"),
             CrawlPolicy.valueOfOrNull(rs.getString("crawl_policy")));
 
@@ -46,7 +48,6 @@ public class Database implements AutoCloseable {
 
     Database(String url, String user, String password) {
         jdbcPool = JdbcConnectionPool.create(url, user, password);
-        init();
         fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
         query = fluent.query();
     }
@@ -68,7 +69,7 @@ public class Database implements AutoCloseable {
         return query.update("INSERT IGNORE INTO origin (id, name, discovered, next_visit) VALUES (?, ?, ?, ?)").params(id, name, discovered, discovered).run().affectedRows() > 0;
     }
 
-    public void tryInsertLocation(Url url, LocationType type, long via, Instant discovered, int priority) {
+    public void tryInsertLocation(Url url, Location.Type type, long via, Instant discovered, int priority) {
         System.out.println("Insert " + url);
         query.update("INSERT IGNORE INTO location (id, origin_id, via, type, url, discovered, next_visit, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
                 .params(url.id(), url.originId(), via, type, url.toString(), discovered, discovered, priority).run();
@@ -93,10 +94,11 @@ public class Database implements AutoCloseable {
                 .orElse(null);
     }
 
-    public Long selectLastVisitResponse(long locationId) {
-        return query.select("SELECT response_offset FROM visit WHERE location_id = ? ORDER BY date DESC LIMIT 1")
-                .params(locationId)
-                .firstResult(Mappers.singleLong()).orElse(null);
+    public UUID selectLastResponseRecordId(String method, long locationId) {
+        return query.select("SELECT response_id FROM visit WHERE method = ? AND location_id = ? ORDER BY date DESC LIMIT 1")
+                .params(method, locationId)
+                .firstResult(rs -> (UUID)rs.getObject("response_id"))
+                .orElse(null);
     }
 
     public void updateLocationVisit(long id, Instant lastVisit, Instant nextVisit, String etag, Instant lastModified) {
@@ -120,7 +122,7 @@ public class Database implements AutoCloseable {
 
     public Origin selectNextOrigin() {
         return query.select("SELECT " + originFields + " FROM origin " +
-                "WHERE crawl_policy IS NULL or crawl_policy = 'CONTINUOUS' " +
+                "WHERE (crawl_policy IS NULL OR crawl_policy = 'CONTINUOUS') AND next_visit IS NOT NULL " +
                 "ORDER BY next_visit ASC LIMIT 1")
                 .firstResult(originMapper).orElse(null);
     }
@@ -140,16 +142,54 @@ public class Database implements AutoCloseable {
         return value == null ? null : value.toInstant();
     }
 
-    public void insertRecord(UUID id, long position) {
-        query.update("INSERT INTO record (id, position) VALUES (?, ?)").params(id, position).run();
-    }
-
-    public void insertVisit(long locationId, Instant date, int status, Long contentLength, String contentType, Long requestOffset, Long responseOffset) {
-        query.update("INSERT INTO visit (location_id, date, status, content_length, content_type, request_offset, response_offset) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                .params(locationId, date, status, contentLength, contentType, requestOffset, responseOffset).run();
+    public void insertVisit(String method, long locationId, Instant date, int status, Long contentLength, String contentType, UUID responseId) {
+        query.update("INSERT INTO visit (method, location_id, date, status, content_length, content_type, response_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                .params(method, locationId, date, status, contentLength, contentType, responseId).run();
     }
 
     public void tryInsertLink(long src, long dst) {
         query.update("INSERT IGNORE INTO link (src, dst) VALUES (?, ?)").params(src, dst).run();
+    }
+
+    public void insertWarc(UUID id, String path, Instant created) {
+        query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(id, path, created).run();
+    }
+
+    public void insertRecord(UUID id, long locationId, Instant date, String type, UUID warcId, long position) {
+        query.update("INSERT INTO record (id, location_id, date, type, warc_id, position) VALUES (?, ?, ?, ?, ?, ?)")
+                .params(id, locationId, date, type, warcId, position).run();
+    }
+
+    public RecordLocation locateRecord(UUID recordId) {
+        return query.select("SELECT warc.path, record.position FROM record " +
+                "LEFT JOIN warc ON warc.id = record.warc_id " +
+                "WHERE record.id = ?").params(recordId).singleResult(RecordLocation::new);
+    }
+
+    public List<Map<String, Object>> paginateCrawlLog(Instant after, boolean pagesOnly, int limit) {
+        return query.select("SELECT v.date, v.method, l.id location_id, l.url, v.status, v.content_type, " +
+                "v.content_length, v.response_id " +
+                "FROM visit v " +
+                "LEFT JOIN location l ON l.id = v.location_id " +
+                "WHERE v.date < ? " + (pagesOnly ? " AND l.type = 'PAGE' " : "") +
+                "ORDER BY date DESC LIMIT ?")
+                .params(after, limit)
+                .listResult(Mappers.map());
+    }
+
+    public List<Map<String, Object>>  visitsForLocation(long locationId) {
+        return query.select("SELECT * FROM visit WHERE location_id = ? ORDER BY date DESC LIMIT 100")
+                .params(locationId)
+                .listResult(Mappers.map());
+    }
+
+    static class RecordLocation {
+        final String path;
+        final long position;
+
+        RecordLocation(ResultSet rs) throws SQLException {
+            this.path = rs.getString("path");
+            this.position = rs.getLong("position");
+        }
     }
 }

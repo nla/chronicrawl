@@ -6,12 +6,12 @@ import static java.util.Objects.requireNonNull;
 
 public class Location {
     private final Url url;
-    private final LocationType type;
+    private final Type type;
     private final String etag;
     private final Instant lastModified;
     final Long via;
 
-    public Location(Url url, LocationType type, String etag, Instant lastModified, Long via) {
+    public Location(Url url, Type type, String etag, Instant lastModified, Long via) {
         this.url = requireNonNull(url, "url");
         this.type = requireNonNull(type, "type");
         this.etag = etag;
@@ -23,7 +23,7 @@ public class Location {
         return url;
     }
 
-    public LocationType type() {
+    public Type type() {
         return type;
     }
 
@@ -33,5 +33,9 @@ public class Location {
 
     public Instant lastModified() {
         return lastModified;
+    }
+
+    public enum Type {
+        ROBOTS, SITEMAP, PAGE, TRANSCLUSION
     }
 }

@@ -2,7 +2,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <name>trickler</name>
-    <groupId>trickler</groupId>
+    <groupId>org.netpreserve</groupId>
     <artifactId>trickler</artifactId>
     <version>0.1.0</version>
 
@@ -46,7 +46,7 @@
         <dependency>
             <groupId>org.netpreserve</groupId>
             <artifactId>jwarc</artifactId>
-            <version>0.10.2</version>
+            <version>0.10.3</version>
         </dependency>
         <dependency>
             <groupId>org.netpreserve</groupId>

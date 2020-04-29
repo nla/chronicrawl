@@ -8,8 +8,11 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static fi.iki.elonen.NanoHTTPD.Response.Status.*;
 
@@ -53,10 +56,20 @@ public class Webapp extends NanoHTTPD implements Closeable {
             switch (session.getMethod().name() + " " + session.getUri()) {
                 case "GET /":
                     return View.home.render();
+                case "GET /location":
+                    Long locationId = paramLong("id");
+                    return View.location.render("location", crawl.db.selectLocationById(locationId),
+                            "visits", crawl.db.visitsForLocation(locationId));
                 case "POST /location/add":
                     String url = param("url");
                     crawl.addSeed(url);
                     return seeOther("/");
+                case "GET /log":
+                    boolean subresources = session.getParameters().containsKey("subresources");
+                    Timestamp after = Optional.ofNullable(param("after", null))
+                            .map(Timestamp::valueOf).orElse(Timestamp.from(Instant.now()));
+                    return View.log.render("log", crawl.db.paginateCrawlLog(after.toInstant(), !subresources,100),
+                            "subresources", subresources, "after", param("after", null));
                 case "GET /origin":
                     Long id = paramLong("id", null);
                     if (id == null) {
@@ -99,7 +112,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
 
         private String param(String name, String defaultValue) {
             var values = session.getParameters().get(name);
-            if (values == null || values.isEmpty()) return defaultValue;
+            if (values == null || values.isEmpty() || values.get(0).isEmpty()) return defaultValue;
             return values.get(0);
         }
     }
@@ -114,7 +127,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, origin;
+        home, location, log, origin;
 
         private final PebbleTemplate template;
 

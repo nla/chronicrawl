@@ -6,13 +6,14 @@ import trickler.TestServer;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assume.assumeNoException;
 
 public class BrowserTest {
 
     @Test
-    public void test() throws IOException, InterruptedException {
+    public void test() throws IOException, InterruptedException, ExecutionException {
         try (TestServer server = new TestServer();
              Browser browser = assumeNewBrowser();
              Tab tab = browser.createTab()) {
@@ -24,9 +25,7 @@ public class BrowserTest {
                             "<img src=replaced.jpg>".getBytes(StandardCharsets.UTF_8));
                 }
             });
-            tab.navigate(server.url() + "/");
-            Thread.sleep(1000);
-
+            tab.navigate(server.url() + "/").get();
         }
     }
 

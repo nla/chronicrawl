@@ -51,7 +51,7 @@ public class Sitemap {
     private static void parseUrlsetTag(XMLStreamReader reader, Consumer<Entry> consumer) throws XMLStreamException {
         while (reader.nextTag() == START_ELEMENT) {
             if (reader.getLocalName().equals("url")) {
-                parseEntry(reader, consumer, LocationType.PAGE);
+                parseEntry(reader, consumer, Location.Type.PAGE);
             } else {
                 skipTag(reader);
             }
@@ -61,14 +61,14 @@ public class Sitemap {
     private static void parseSitemapIndextag(XMLStreamReader reader, Consumer<Entry> consumer) throws XMLStreamException {
         while (reader.nextTag() == START_ELEMENT) {
             if (reader.getLocalName().equals("sitemap")) {
-                parseEntry(reader, consumer, LocationType.SITEMAP);
+                parseEntry(reader, consumer, Location.Type.SITEMAP);
             } else {
                 skipTag(reader);
             }
         }
     }
 
-    private static void parseEntry(XMLStreamReader reader, Consumer<Entry> consumer, LocationType type) throws XMLStreamException {
+    private static void parseEntry(XMLStreamReader reader, Consumer<Entry> consumer, Location.Type type) throws XMLStreamException {
         String loc = null;
         ChangeFreq changefreq = null;
         Float priority = null;
@@ -121,12 +121,12 @@ public class Sitemap {
 
     public static class Entry {
         public final String loc;
-        public final LocationType type;
+        public final Location.Type type;
         public final TemporalAccessor lastmod;
         public final ChangeFreq changefreq;
         public final Float priority;
 
-        public Entry(String loc, LocationType type, TemporalAccessor lastmod, ChangeFreq changefreq, Float priority) {
+        public Entry(String loc, Location.Type type, TemporalAccessor lastmod, ChangeFreq changefreq, Float priority) {
             this.loc = loc;
             this.type = type;
             this.lastmod = lastmod;

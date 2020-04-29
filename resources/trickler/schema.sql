@@ -4,12 +4,13 @@ DROP TABLE IF EXISTS snapshot;
 DROP TABLE IF EXISTS location;
 DROP TABLE IF EXISTS origin;
 DROP TABLE IF EXISTS record;
+DROP TABLE IF EXISTS warc;
 
 CREATE TABLE origin
 (
-    id                 BIGINT                                             NOT NULL PRIMARY KEY,
-    name               TEXT                                               NOT NULL,
-    discovered         TIMESTAMP                                          NOT NULL,
+    id                 BIGINT                                            NOT NULL PRIMARY KEY,
+    name               TEXT                                              NOT NULL,
+    discovered         TIMESTAMP                                         NOT NULL,
     last_visit         TIMESTAMP,
     next_visit         TIMESTAMP,
     robots_crawl_delay SMALLINT,
@@ -20,7 +21,7 @@ CREATE TABLE origin
 CREATE TABLE location
 (
     id                 BIGINT PRIMARY KEY                                                         NOT NULL,
-    url                TEXT                                                                       NOT NULL,
+    url                VARCHAR(4000)                                                              NOT NULL,
     type               ENUM ('ROBOTS', 'SITEMAP', 'PAGE', 'TRANSCLUSION')                         NOT NULL DEFAULT 'SEED',
     origin_id          BIGINT                                                                     NOT NULL,
     via                BIGINT                                                                     NOT NULL DEFAULT 0,
@@ -36,15 +37,33 @@ CREATE TABLE location
     FOREIGN KEY (origin_id) REFERENCES origin (id) ON DELETE CASCADE
 );
 
+CREATE TABLE warc
+(
+    id      UUID      NOT NULL PRIMARY KEY,
+    path    TEXT      NOT NULL,
+    created TIMESTAMP NOT NULL
+);
+
+CREATE TABLE record
+(
+    id          UUID                                                                          NOT NULL PRIMARY KEY,
+    location_id BIGINT                                                                        NOT NULL,
+    date        TIMESTAMP                                                                     NOT NULL,
+    type        ENUM ('warcinfo', 'request', 'response', 'revisit', 'metadata', 'conversion') NOT NULL,
+    warc_id     UUID                                                                          NOT NULL,
+    position    BIGINT                                                                        NOT NULL,
+    FOREIGN KEY (warc_id) REFERENCES warc (id) ON DELETE CASCADE
+);
+
 CREATE TABLE visit
 (
-    location_id     BIGINT    NOT NULL,
-    date            TIMESTAMP NOT NULL,
-    status          SMALLINT  NOT NULL,
-    content_type    TEXT      NULL,
-    content_length  BIGINT    NULL,
-    request_offset  BIGINT    NULL,
-    response_offset BIGINT    NULL,
+    method         VARCHAR(16)  NOT NULL,
+    location_id    BIGINT       NOT NULL,
+    date           TIMESTAMP    NOT NULL,
+    status         SMALLINT     NOT NULL,
+    content_type   VARCHAR(128) NULL,
+    content_length BIGINT       NULL,
+    response_id    UUID         NOT NULL,
     PRIMARY KEY (location_id, date),
     FOREIGN KEY (location_id) REFERENCES location (id) ON DELETE CASCADE
 );

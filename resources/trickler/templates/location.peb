@@ -1,0 +1,24 @@
+{% extends "./layout.peb" %}
+
+{% block content %}
+<h2>Location</h2>
+<table>
+    <tr><th>URL:</th><td><a href="{{ location.url }}">{{ location.url }}</a></td></tr>
+    <tr><th>Type:</th><td>{{ location.type }}</td></tr>
+    <tr><th>Etag:</th><td>{{ location.etag }}</td></tr>
+    <tr><th>Last-Modified:</th><td>{{ location.lastModified }}</td></tr>
+</table>
+
+<h3>Visits</h3>
+<table>
+    {% for visit in visits %}
+        <tr>
+            <td>{{ visit.date }}</td>
+            <td>{{ visit.method }}</td>
+            <td>{{ visit.status }}</td>
+            <td>{{ visit.content_type }}</td>
+            <td>{{ visit.content_length }}</td>
+        </tr>
+    {% endfor %}
+</table>
+{% endblock %}

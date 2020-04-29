@@ -24,10 +24,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 
 import static java.nio.file.StandardOpenOption.*;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
-import static trickler.LocationType.TRANSCLUSION;
+import static trickler.Location.Type.TRANSCLUSION;
 
 public class Exchange implements Closeable {
     public static final int STATUS_ROBOTS_DISALLOWED = -9998;
@@ -43,9 +45,8 @@ public class Exchange implements Closeable {
     HttpRequest httpRequest;
     HttpResponse httpResponse;
     InetAddress ip;
-    Long requestOffset;
-    Long responseOffset;
     private int fetchStatus;
+    UUID responseId;
 
     public Exchange(Crawl crawl, Origin origin, Location location) throws IOException {
         this.crawl = crawl;
@@ -129,8 +130,8 @@ public class Exchange implements Closeable {
                 try {
                     Url url = new Url(request.url());
                     System.out.println(url);
-                    Long subresponseOffset = crawl.db.selectLastVisitResponse(url.id());
-                    if (subresponseOffset == null) {
+                    UUID lastVisitResponseId = crawl.db.selectLastResponseRecordId(request.method(), url.id());
+                    if (lastVisitResponseId == null) {
                         enqueue(url, TRANSCLUSION, 40);
                         Origin origin = crawl.db.selectOriginById(url.originId());
                         if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
@@ -139,20 +140,22 @@ public class Exchange implements Closeable {
                         Location location = crawl.db.selectLocationById(url.id());
                         try (Exchange subexchange = new Exchange(crawl, origin, location)) {
                             subexchange.run();
-                            subresponseOffset = subexchange.responseOffset;
+                            lastVisitResponseId = subexchange.responseId;
                         }
                     }
-                    crawl.storage.readResponse(subresponseOffset, request::fulfill);
+                    crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
                 } catch (IOException e) {
                     request.fail("Failed");
                     log.error("Error replaying " + url, e);
                 }
             });
-            tab.navigate(location.url().toString());
             try {
-                Thread.sleep(1000);
+                tab.navigate(location.url().toString()).get();
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof RuntimeException) throw (RuntimeException)e.getCause();
+                throw new RuntimeException(e.getCause());
             }
         }
     }
@@ -166,7 +169,7 @@ public class Exchange implements Closeable {
         }
         System.out.println("robots " + rules.getSitemaps());
         for (String sitemapUrl : rules.getSitemaps()) {
-            enqueue(location.url().resolve(sitemapUrl), LocationType.SITEMAP, 2);
+            enqueue(location.url().resolve(sitemapUrl), Location.Type.SITEMAP, 2);
         }
         crawl.db.updateOriginRobots(location.url().originId(), crawlDelay, content);
     }
@@ -174,12 +177,12 @@ public class Exchange implements Closeable {
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
             Url url = location.url().resolve(entry.loc);
-            enqueue(url, entry.type, entry.type == LocationType.SITEMAP ? 3 : 10);
+            enqueue(url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
             crawl.db.updateLocationSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
     }
 
-    private void enqueue(Url targetUrl, LocationType type, int priority) {
+    private void enqueue(Url targetUrl, Location.Type type, int priority) {
         crawl.db.tryInsertLocation(targetUrl, type, location.url().id(), date, priority);
         crawl.db.tryInsertLink(location.url().id(), targetUrl.id());
     }
@@ -191,7 +194,7 @@ public class Exchange implements Closeable {
         Long contentLength = httpResponse == null ? null : httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
         crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
         crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)), etag(), lastModified());
-        crawl.db.insertVisit(url.id(), date, fetchStatus, contentLength, contentType, requestOffset, responseOffset);
+        crawl.db.insertVisit(httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType, responseId);
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
                 location.url(), location.type(), via != null ? via.url() : "-", contentType != null ? contentType : "-");
         System.out.flush();

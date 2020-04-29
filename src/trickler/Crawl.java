@@ -15,7 +15,7 @@ public class Crawl implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Crawl.class);
     final Config config;
     final Database db;
-    final Browser browser = new Browser();
+    final Browser browser;
     final Storage storage;
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
 
@@ -26,16 +26,17 @@ public class Crawl implements Closeable {
     public Crawl(Config config, Database db) throws IOException {
         this.config = config;
         this.db = db;
-        storage = new Storage(db);
+        storage = new Storage(config, db);
+        browser = new Browser();
     }
 
     public void addSeed(String url) {
         Url crawlUrl = new Url(url);
         Instant now = Instant.now();
         if (db.tryInsertOrigin(crawlUrl.originId(), crawlUrl.origin(), now)) {
-            db.tryInsertLocation(crawlUrl.resolve("/robots.txt"), LocationType.ROBOTS, crawlUrl.id(), now, 1);
+            db.tryInsertLocation(crawlUrl.resolve("/robots.txt"), Location.Type.ROBOTS, crawlUrl.id(), now, 1);
         }
-        db.tryInsertLocation(crawlUrl, LocationType.PAGE, 0, now, 10);
+        db.tryInsertLocation(crawlUrl, Location.Type.PAGE, 0, now, 10);
     }
 
     @Override
@@ -75,6 +76,10 @@ public class Crawl implements Closeable {
             }
         }
         Location location = db.selectNextLocation(origin.id);
+        if (location == null) {
+            db.updateOriginVisit(origin.id, Instant.now(), null);
+            return;
+        }
         try (Exchange exchange = new Exchange(this, origin, location)) {
             exchange.run();
         }

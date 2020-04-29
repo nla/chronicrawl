@@ -35,7 +35,8 @@ public class Browser implements Closeable {
         Process process = null;
         for (String executable : executables) {
             try {
-                process = new ProcessBuilder(executable, "--headless", "--remote-debugging-port=0")
+                process = new ProcessBuilder(executable, "--headless", "--remote-debugging-port=0",
+                        "--enable-logging=stderr", "--v=1")
                         .inheritIO()
                         .redirectError(ProcessBuilder.Redirect.PIPE)
                         .start();

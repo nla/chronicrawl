@@ -34,7 +34,7 @@ public class PausedRequest {
 
     public void fulfill(WarcResponse warcResponse) throws IOException {
         var headers = new ArrayList<Map.Entry<String, String>>();
-        for (var entry : warcResponse.headers().map().entrySet()) {
+        for (var entry : warcResponse.http().headers().map().entrySet()) {
             for (var value : entry.getValue()) {
                 headers.add(new AbstractMap.SimpleEntry<>(entry.getKey(), value));
             }

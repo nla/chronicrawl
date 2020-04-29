@@ -1,29 +1,22 @@
 package trickler;
 
-import org.netpreserve.jwarc.WarcWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import trickler.browser.Browser;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static java.nio.file.StandardOpenOption.*;
-
 public class Crawl implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Crawl.class);
     final Config config;
     final Database db;
-    final WarcWriter warcWriter;
     final Browser browser = new Browser();
-    final Path warcFile = Paths.get("data/output.warc.gz");
+    final Storage storage;
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
 
     public Crawl() throws IOException {
@@ -33,7 +26,7 @@ public class Crawl implements Closeable {
     public Crawl(Config config, Database db) throws IOException {
         this.config = config;
         this.db = db;
-        warcWriter = new WarcWriter(FileChannel.open(warcFile, WRITE, CREATE, APPEND));
+        storage = new Storage(db);
     }
 
     public void addSeed(String url) {
@@ -47,13 +40,9 @@ public class Crawl implements Closeable {
 
     @Override
     public void close() {
-        db.close();
-        try {
-            warcWriter.close();
-        } catch (IOException e) {
-            log.error("Error closing warcWriter", e);
-        }
         browser.close();
+        db.close();
+        storage.close();
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {

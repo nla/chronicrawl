@@ -1,7 +1,9 @@
 package trickler.browser;
 
 import com.grack.nanojson.JsonObject;
+import org.netpreserve.jwarc.WarcResponse;
 
+import java.io.IOException;
 import java.util.*;
 
 public class PausedRequest {
@@ -27,6 +29,18 @@ public class PausedRequest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Map<String,String> headers() {
         return (Map)Collections.unmodifiableMap(request.getObject("headers"));
+    }
+
+
+    public void fulfill(WarcResponse warcResponse) throws IOException {
+        var headers = new ArrayList<Map.Entry<String, String>>();
+        for (var entry : warcResponse.headers().map().entrySet()) {
+            for (var value : entry.getValue()) {
+                headers.add(new AbstractMap.SimpleEntry<>(entry.getKey(), value));
+            }
+        }
+        fulfill(warcResponse.http().status(), warcResponse.http().reason().trim(),
+                headers, warcResponse.http().body().stream().readNBytes(100 * 1024 * 1024));
     }
 
     public void fulfill(int status, String reason, Collection<Map.Entry<String, String>> headers, byte[] body) {
@@ -68,4 +82,5 @@ public class PausedRequest {
                 ", headers=" + headers() +
                 '}';
     }
+
 }

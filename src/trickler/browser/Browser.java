@@ -53,7 +53,7 @@ public class Browser implements Closeable {
         }
 
         public void onOpen(ServerHandshake handshakeData) {
-            log.trace("Connected");
+            log.trace("WebSocket connected");
         }
 
         public void onMessage(String rawMessage) {
@@ -95,10 +95,12 @@ public class Browser implements Closeable {
             }
         }
         public void onClose(int code, String reason, boolean remote) {
-            log.warn("WebSocket closed: {} {}", code, reason);
+            if (remote) {
+                log.error("WebSocket closed: {} {}", code, reason);
+            }
         }
         public void onError(Exception ex) {
-            log.warn("WebSocket error", ex);
+            log.error("WebSocket error", ex);
         }
     }
 
@@ -169,13 +171,13 @@ public class Browser implements Closeable {
         return devtoolsUrl;
     }
 
-    public void close() throws IOException {
+    public void close() {
         websocket.close();
         process.destroy();
         try {
             process.waitFor(1, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
-            throw new IOException(e);
+            // uh
         } finally {
             process.destroyForcibly();
         }

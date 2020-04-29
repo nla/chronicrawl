@@ -2,6 +2,7 @@ package trickler;
 
 import org.codejargon.fluentjdbc.api.FluentJdbc;
 import org.codejargon.fluentjdbc.api.FluentJdbcBuilder;
+import org.codejargon.fluentjdbc.api.mapper.Mappers;
 import org.codejargon.fluentjdbc.api.mapper.ObjectMappers;
 import org.codejargon.fluentjdbc.api.query.Mapper;
 import org.codejargon.fluentjdbc.api.query.Query;
@@ -31,6 +32,13 @@ public class Database implements AutoCloseable {
             rs.getString("etag"),
             getInstant(rs, "last_modified"),
             getLongOrNull(rs, "via"));
+    private final static String originFields = "id, name, robots_crawl_delay, next_visit, robots_txt, crawl_policy";
+    private final static Mapper<Origin> originMapper = rs -> new Origin(rs.getLong("id"),
+            rs.getString("name"),
+            getLongOrNull(rs, "robots_crawl_delay"),
+            rs.getTimestamp("next_visit").toInstant(),
+            rs.getBytes("robots_txt"),
+            CrawlPolicy.valueOfOrNull(rs.getString("crawl_policy")));
 
     Database() {
         this("jdbc:h2:file:./data/db;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE", "sa", "");
@@ -85,6 +93,12 @@ public class Database implements AutoCloseable {
                 .orElse(null);
     }
 
+    public Long selectLastVisitResponse(long locationId) {
+        return query.select("SELECT response_offset FROM visit WHERE location_id = ? ORDER BY date DESC LIMIT 1")
+                .params(locationId)
+                .firstResult(Mappers.singleLong()).orElse(null);
+    }
+
     public void updateLocationVisit(long id, Instant lastVisit, Instant nextVisit, String etag, Instant lastModified) {
         check(query.update("UPDATE location SET next_visit = ?, last_visit = ?, etag = ?, last_modified = ? WHERE id = ?").params(nextVisit, lastVisit, etag, lastModified, id).run());
     }
@@ -105,12 +119,15 @@ public class Database implements AutoCloseable {
     }
 
     public Origin selectNextOrigin() {
-        return query.select("SELECT id, name, robots_crawl_delay, next_visit, robots_txt FROM origin ORDER BY next_visit ASC LIMIT 1")
-                .firstResult(rs -> new Origin(rs.getLong("id"),
-                        rs.getString("name"),
-                        getLongOrNull(rs, "robots_crawl_delay"),
-                        rs.getTimestamp("next_visit").toInstant(),
-                        rs.getBytes("robots_txt"))).orElse(null);
+        return query.select("SELECT " + originFields + " FROM origin " +
+                "WHERE crawl_policy IS NULL or crawl_policy = 'CONTINUOUS' " +
+                "ORDER BY next_visit ASC LIMIT 1")
+                .firstResult(originMapper).orElse(null);
+    }
+
+    public Origin selectOriginById(long originId) {
+        return query.select("SELECT " + originFields + " FROM origin WHERE id = ?")
+                .params(originId).firstResult(originMapper).orElse(null);
     }
 
     public static Long getLongOrNull(ResultSet rs, String field) throws SQLException {

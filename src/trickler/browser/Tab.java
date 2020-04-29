@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Notionally a browser tab. At the protocol level this a devtools 'target'.
@@ -15,7 +16,7 @@ public class Tab implements Closeable {
     private final Browser browser;
     private final String targetId;
     private final String sessionId;
-    private RequestInterceptor requestInterceptor;
+    private Consumer<PausedRequest> requestInterceptor;
 
     Tab(Browser browser) {
         this.browser = browser;
@@ -35,7 +36,7 @@ public class Tab implements Closeable {
                 PausedRequest request = new PausedRequest(this, params.getString("requestId"), params.getObject("request"));
                 if (requestInterceptor != null) {
                     try {
-                        requestInterceptor.onRequestPaused(request);
+                        requestInterceptor.accept(request);
                     } catch (Throwable t) {
                         if (!request.handled) {
                             request.fail("Failed");
@@ -59,7 +60,7 @@ public class Tab implements Closeable {
         browser.sessionEventHandlers.remove(sessionId);
     }
 
-    public void interceptRequests(RequestInterceptor requestHandler) {
+    public void interceptRequests(Consumer<PausedRequest> requestHandler) {
         this.requestInterceptor = requestHandler;
         call("Fetch.enable", Map.of());
     }

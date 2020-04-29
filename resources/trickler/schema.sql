@@ -7,20 +7,21 @@ DROP TABLE IF EXISTS record;
 
 CREATE TABLE origin
 (
-    id                 BIGINT    NOT NULL PRIMARY KEY,
-    name               TEXT      NOT NULL,
-    discovered         TIMESTAMP NOT NULL,
+    id                 BIGINT                                             NOT NULL PRIMARY KEY,
+    name               TEXT                                               NOT NULL,
+    discovered         TIMESTAMP                                          NOT NULL,
     last_visit         TIMESTAMP,
     next_visit         TIMESTAMP,
     robots_crawl_delay SMALLINT,
-    robots_txt         BLOB
+    robots_txt         BLOB,
+    crawl_policy       ENUM ('FORBIDDEN', 'TRANSCLUSIONS', 'CONTINUOUS') NULL
 );
 
 CREATE TABLE location
 (
     id                 BIGINT PRIMARY KEY                                                         NOT NULL,
     url                TEXT                                                                       NOT NULL,
-    type               ENUM ('ROBOTS', 'SITEMAP', 'PAGE')                                         NOT NULL DEFAULT 'SEED',
+    type               ENUM ('ROBOTS', 'SITEMAP', 'PAGE', 'TRANSCLUSION')                         NOT NULL DEFAULT 'SEED',
     origin_id          BIGINT                                                                     NOT NULL,
     via                BIGINT                                                                     NOT NULL DEFAULT 0,
     discovered         TIMESTAMP                                                                  NOT NULL,

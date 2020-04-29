@@ -7,18 +7,19 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+import static org.junit.Assume.assumeNoException;
+
 public class BrowserTest {
 
     @Test
     public void test() throws IOException, InterruptedException {
         try (TestServer server = new TestServer();
-             Browser browser = new Browser();
+             Browser browser = assumeNewBrowser();
              Tab tab = browser.createTab()) {
 
-            tab.interceptRequests(new RequestInterceptor() {
-                @Override
-                public void onRequestPaused(PausedRequest request) {
-                    System.out.println(request);
+            tab.interceptRequests(request -> {
+                System.out.println(request);
+                if (request.url().endsWith("/")) {
                     request.fulfill(200, "OK", Map.of("Content-Type", "text/html").entrySet(),
                             "<img src=replaced.jpg>".getBytes(StandardCharsets.UTF_8));
                 }
@@ -26,6 +27,15 @@ public class BrowserTest {
             tab.navigate(server.url() + "/");
             Thread.sleep(1000);
 
+        }
+    }
+
+    public Browser assumeNewBrowser() throws IOException {
+        try {
+            return new Browser();
+        } catch (IOException e) {
+            assumeNoException("browser must be runnable", e);
+            throw e;
         }
     }
 

@@ -6,7 +6,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 
-public class TricklerTest {
+public class CrawlTest {
     private static TestServer testServer;
 
     @BeforeClass
@@ -25,12 +25,14 @@ public class TricklerTest {
         db.init();
         Config config = new Config();
         config.maxDelayMillis = 0;
-        try (Trickler trickler = new Trickler(config, db)) {
-            trickler.addSeed("http://localhost:/");
-            trickler.step();
-            trickler.step();
-            trickler.step();
-            trickler.step();
+        try (Crawl crawl = new Crawl(config, db)) {
+            crawl.addSeed(testServer.url() + "/");
+            crawl.step();
+            crawl.step();
+            crawl.step();
+            crawl.step();
+            crawl.step();
+            crawl.step();
         }
     }
 }

@@ -9,6 +9,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAccessor;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 import static javax.xml.stream.XMLStreamConstants.START_ELEMENT;
@@ -19,12 +20,19 @@ import static javax.xml.stream.XMLStreamConstants.START_ELEMENT;
  * @see <a href="Sitemap protocol definition"></a>https://www.sitemaps.org/protocol.html</a>
  */
 public class Sitemap {
-    private static final XMLInputFactory xmlInputFactory = XMLInputFactory.newInstance();
+    private static final XMLInputFactory xmlInputFactory;
+
+    static {
+        xmlInputFactory = XMLInputFactory.newInstance();
+        xmlInputFactory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        xmlInputFactory.setProperty("javax.xml.stream.isSupportingExternalEntities", false);
+    }
+
     private static final DateTimeFormatter W3C_DATE = DateTimeFormatter.ofPattern("yyyy[-MM[-dd]]", Locale.ROOT)
             .withZone(ZoneOffset.UTC);
 
     public static void parse(InputStream stream, Consumer<Entry> consumer) throws XMLStreamException {
-        XMLStreamReader reader = xmlInputFactory.createXMLStreamReader(stream);
+        XMLStreamReader reader = xmlInputFactory.createXMLStreamReader(Objects.requireNonNull(stream));
         try {
             if (reader.nextTag() == START_ELEMENT) {
                 if (reader.getLocalName().equals("urlset")) {

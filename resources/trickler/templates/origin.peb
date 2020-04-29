@@ -1,0 +1,5 @@
+{% extends "./layout.peb" %}
+
+{% block content %}
+<h1>Origin: {{ origin.name }}</h1>
+{% endblock %}

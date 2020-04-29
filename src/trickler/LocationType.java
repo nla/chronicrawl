@@ -1,5 +1,5 @@
 package trickler;
 
 public enum  LocationType {
-    ROBOTS, SITEMAP, PAGE
+    ROBOTS, SITEMAP, PAGE, TRANSCLUSION
 }

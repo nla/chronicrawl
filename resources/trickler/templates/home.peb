@@ -1,0 +1,10 @@
+{% extends "./layout.peb" %}
+
+{% block content %}
+    <h1>Trickler</h1>
+
+        <h2>Add seed</h2>
+        <form action="/location/add" method="post">
+            <input name="url" type="url"> <button type="submit">Add Seed</button>
+        </form>
+{% endblock %}

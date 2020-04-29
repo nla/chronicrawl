@@ -6,9 +6,12 @@ import crawlercommons.robots.SimpleRobotRulesParser;
 import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import trickler.browser.Tab;
 
 import javax.xml.stream.XMLStreamException;
+import java.io.Closeable;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -20,15 +23,19 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.UUID;
 
 import static java.nio.file.StandardOpenOption.*;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
+import static trickler.LocationType.TRANSCLUSION;
 
-public class Exchange {
+public class Exchange implements Closeable {
     public static final int STATUS_ROBOTS_DISALLOWED = -9998;
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
-    private final Trickler crawl;
+    private final Crawl crawl;
     private final Origin origin;
     private final Location location;
     private final Location via;
@@ -43,7 +50,7 @@ public class Exchange {
     private Long responseOffset;
     private int fetchStatus;
 
-    public Exchange(Trickler crawl, Origin origin, Location location) throws IOException {
+    public Exchange(Crawl crawl, Origin origin, Location location) throws IOException {
         this.crawl = crawl;
         this.origin = origin;
         this.location = location;
@@ -51,17 +58,18 @@ public class Exchange {
         bufferFile = FileChannel.open(tempFile, READ, WRITE, DELETE_ON_CLOSE, TRUNCATE_EXISTING);
         url = location.url();
         this.via = location.via == null ? null : crawl.db.selectLocationById(location.via);
+        crawl.exchanges.add(this);
     }
 
     public void run() throws IOException {
         if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url().toString())) {
             fetch();
-            process();
             save();
+            finish();
         } else {
             fetchStatus = STATUS_ROBOTS_DISALLOWED;
         }
-        finish();
+        process();
     }
 
     private SimpleRobotRules parseRobots(String url, byte[] robotsTxt) {
@@ -96,7 +104,9 @@ public class Exchange {
         fetchStatus = httpResponse.status();
     }
 
-    private void process() {
+    private void process() throws IOException {
+        bufferFile.position(0);
+        httpResponse = HttpResponse.parse(LengthedBody.create(bufferFile, ByteBuffer.allocate(8192).flip(), bufferFile.size()));
         try {
             if (hadSuccessStatus()) {
                 switch (location.type()) {
@@ -117,7 +127,59 @@ public class Exchange {
     }
 
     private void processPage() {
-
+        try (Tab tab = crawl.browser.createTab()) {
+            tab.interceptRequests(request -> {
+                Url url = new Url(request.url());
+                System.out.println(url);
+                Long subresponseOffset = crawl.db.selectLastVisitResponse(url.id());
+                if (subresponseOffset == null) {
+                    enqueue(url, TRANSCLUSION, 40);
+                    Origin origin = crawl.db.selectOriginById(url.originId());
+                    if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
+                        request.fail("AccessDenied");
+                        return;
+                    }
+                    Location location = crawl.db.selectLocationById(url.id());
+                    try (Exchange subexchange = new Exchange(crawl, origin, location)) {
+                        subexchange.run();
+                        subresponseOffset = subexchange.responseOffset;
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }
+                if (subresponseOffset == null) {
+                    throw new RuntimeException("subrequest failed");
+                }
+                try (FileChannel channel = FileChannel.open(crawl.warcFile)) {
+                    channel.position(subresponseOffset);
+                    try (WarcReader warcReader = new WarcReader(channel)) {
+                        WarcRecord record = warcReader.next().orElse(null);
+                        if (record == null) throw new IOException("Record was missing");
+                        if (!(record instanceof WarcResponse))
+                            throw new IOException("Got " + record.getClass() + " instead of WarcResponse");
+                        WarcResponse response = (WarcResponse) record;
+                        int maxLen = 100 * 1024 * 1024;
+                        HttpResponse httpResponse = response.http();
+                        byte[] body = httpResponse.body().stream().readNBytes(maxLen);
+                        var headers = new ArrayList<Map.Entry<String, String>>();
+                        for (var entry : httpResponse.headers().map().entrySet()) {
+                            for (var value : entry.getValue()) {
+                                headers.add(new AbstractMap.SimpleEntry<>(entry.getKey(), value));
+                            }
+                        }
+                        request.fulfill(httpResponse.status(), httpResponse.reason().trim(), headers, body);
+                    }
+                } catch (IOException e) {
+                    throw new UncheckedIOException("Failed to read record at position " + subresponseOffset, e);
+                }
+            });
+            tab.navigate(location.url().toString());
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     private void processRobots() throws IOException {
@@ -178,7 +240,6 @@ public class Exchange {
     private void finish() {
         String contentType = httpResponse == null ? null : httpResponse.contentType().base().toString();
         Long contentLength = httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
-
         crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
         crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)), etag(), lastModified());
         crawl.db.insertVisit(url.id(), date, httpResponse.status(), contentLength, contentType, requestOffset, responseOffset);
@@ -217,5 +278,11 @@ public class Exchange {
         } else {
             return location.lastModified();
         }
+    }
+
+    @Override
+    public void close() throws IOException {
+        bufferFile.close();
+        crawl.exchanges.remove(this);
     }
 }

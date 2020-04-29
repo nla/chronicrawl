@@ -1,0 +1,4 @@
+<!doctype html>
+<meta charset=utf-8>
+<title>{% block title %}Home{% endblock %} - Trickler</title>
+{% block content %}Missing content block!{% endblock %}

@@ -1,6 +1,9 @@
 package trickler;
 
 public class Config {
+    /** Listening port of the web user interface */
+    int uiPort = 8080;
+
     /** User-Agent header to send to the server */
     String userAgent = "trickler";
 

@@ -14,6 +14,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -23,7 +24,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 public class Browser implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Browser.class);
-
+    private static final List<String> executables = List.of("chromium-browser", "chromium", "google-chrome");
     private final Process process;
     private final WebSocket websocket;
     private final AtomicLong idSeq = new AtomicLong(0);
@@ -31,12 +32,20 @@ public class Browser implements Closeable {
     private Map<Long, CompletableFuture<JsonObject>> calls = new ConcurrentHashMap<>();
 
     public Browser() throws IOException {
-        process = new ProcessBuilder("chromium", "--headless", "--remote-debugging-port=0"
-//                , "--enable-logging=stderr", "--v=1"
-        )
-                .inheritIO()
-                .redirectError(ProcessBuilder.Redirect.PIPE)
-                .start();
+        Process process = null;
+        for (String executable : executables) {
+            try {
+                process = new ProcessBuilder(executable, "--headless", "--remote-debugging-port=0")
+                        .inheritIO()
+                        .redirectError(ProcessBuilder.Redirect.PIPE)
+                        .start();
+            } catch (IOException e) {
+                continue;
+            }
+            break;
+        }
+        if (process == null) throw new IOException("Couldn't execute any of: " + executables);
+        this.process = process;
         String url = readDevtoolsUrlFromStderr();
         log.trace("Connecting to {}", url);
         websocket = new WebSocket(URI.create(url));

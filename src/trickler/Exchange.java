@@ -239,10 +239,10 @@ public class Exchange implements Closeable {
 
     private void finish() {
         String contentType = httpResponse == null ? null : httpResponse.contentType().base().toString();
-        Long contentLength = httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
+        Long contentLength = httpResponse == null ? null : httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
         crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
         crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)), etag(), lastModified());
-        crawl.db.insertVisit(url.id(), date, httpResponse.status(), contentLength, contentType, requestOffset, responseOffset);
+        crawl.db.insertVisit(url.id(), date, fetchStatus, contentLength, contentType, requestOffset, responseOffset);
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
                 location.url(), location.type(), via != null ? via.url() : "-", contentType != null ? contentType : "-");
         System.out.flush();

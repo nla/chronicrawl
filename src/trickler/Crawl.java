@@ -56,7 +56,7 @@ public class Crawl implements Closeable {
         browser.close();
     }
 
-    public static void main(String args[]) throws IOException, InterruptedException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         try (Crawl crawl = new Crawl()) {
             crawl.addSeed(args[0]);
             while (true) {

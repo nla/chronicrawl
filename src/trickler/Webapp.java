@@ -85,7 +85,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         }
 
         Long paramLong(String name) {
-            return mandatory(name, paramLong(name));
+            return mandatory(name, paramLong(name, null));
         }
 
         private Long paramLong(String name, Long defaultValue) {
@@ -129,7 +129,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
             }
             StringWriter buffer = new StringWriter();
             try {
-                template.evaluate(buffer);
+                template.evaluate(buffer, model);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }

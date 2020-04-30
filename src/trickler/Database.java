@@ -28,12 +28,14 @@ public class Database implements AutoCloseable {
     private final Query query;
     private final ObjectMappers objectMappers = ObjectMappers.builder().build();
 
-    private final static String locationFields = "url, type, etag, last_modified, via";
+    private final static String locationFields = "url, type, etag, last_modified, via, etag_response_id, etag_date";
     private final static Mapper<Location> locationMapper = rs -> new Location(new Url(rs.getString("url")),
             Location.Type.valueOf(rs.getString("type")),
             rs.getString("etag"),
             getInstant(rs, "last_modified"),
-            getLongOrNull(rs, "via"));
+            getLongOrNull(rs, "via"),
+            rs.getObject("etag_response_id", UUID.class),
+            getInstant(rs, "etag_date"));
     private final static String originFields = "id, name, robots_crawl_delay, next_visit, robots_txt, crawl_policy";
     private final static Mapper<Origin> originMapper = rs -> new Origin(rs.getLong("id"),
             rs.getString("name"),
@@ -101,9 +103,14 @@ public class Database implements AutoCloseable {
                 .orElse(null);
     }
 
-    public void updateLocationVisit(long id, Instant lastVisit, Instant nextVisit, String etag, Instant lastModified) {
-        check(query.update("UPDATE location SET next_visit = ?, last_visit = ?, etag = ?, last_modified = ? WHERE id = ?").params(nextVisit, lastVisit, etag, lastModified, id).run());
+    public void updateLocationVisit(long id, Instant lastVisit, Instant nextVisit) {
+        check(query.update("UPDATE location SET next_visit = ?, last_visit = ? WHERE id = ?").params(nextVisit, lastVisit, id).run());
     }
+
+    public void updateLocationEtag(long id, String etag, Instant lastModified, UUID etagResponseId, Instant etagDate) {
+        check(query.update("UPDATE location SET etag = ?, last_modified = ?, etag_response_id = ? WHERE id = ?").params(etag, lastModified, etagResponseId, id).run());
+    }
+
 
     public void updateOriginVisit(long originId, Instant lastVisit, Instant nextVisit) {
         check(query.update("UPDATE origin SET next_visit = ?, last_visit = ? WHERE id = ?").params(nextVisit, lastVisit, originId).run());

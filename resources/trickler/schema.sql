@@ -34,6 +34,8 @@ CREATE TABLE location
     sitemap_lastmod    VARCHAR(40)                                                                NULL,
     etag               TEXT                                                                       NULL,
     last_modified      TIMESTAMP                                                                  NULL,
+    etag_response_id   UUID                                                                       NULL,
+    etag_date          TIMESTAMP                                                                  NULL,
     FOREIGN KEY (origin_id) REFERENCES origin (id) ON DELETE CASCADE
 );
 

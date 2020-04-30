@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -78,13 +79,25 @@ public class Storage implements Closeable {
             if (exchange.httpResponse != null) {
                 exchange.bufferFile.position(0);
                 UUID responseId = UuidCreator.getTimeOrdered();
-                WarcResponse response = new WarcResponse.Builder(exchange.url.toURI())
-                        .recordId(responseId)
-                        .date(exchange.date)
-                        .body(MediaType.HTTP_RESPONSE, exchange.bufferFile, exchange.bufferFile.size())
-                        .concurrentTo(request.id())
-                        .ipAddress(exchange.ip)
-                        .build();
+                WarcCaptureRecord response;
+                if (exchange.httpResponse.status() == 304 && exchange.location.etagResponseId != null) {
+                    response = new WarcRevisit.Builder(exchange.location.url().toURI(), WarcRevisit.SERVER_NOT_MODIFIED_1_1)
+                            .recordId(responseId)
+                            .date(exchange.date)
+                            .body(MediaType.HTTP_RESPONSE, exchange.bufferFile, exchange.bufferFile.size())
+                            .concurrentTo(request.id())
+                            .ipAddress(exchange.ip)
+                            .refersTo(exchange.location.etagResponseId, exchange.url.toURI(), exchange.location.etagDate)
+                            .build();
+                } else {
+                    response = new WarcResponse.Builder(exchange.url.toURI())
+                            .recordId(responseId)
+                            .date(exchange.date)
+                            .body(MediaType.HTTP_RESPONSE, exchange.bufferFile, exchange.bufferFile.size())
+                            .concurrentTo(request.id())
+                            .ipAddress(exchange.ip)
+                            .build();
+                }
                 long responseOffset = warcWriter.position();
                 warcWriter.write(response);
                 db.insertRecord(responseId, exchange.url.id(), exchange.date, response.type(), warcId, responseOffset);

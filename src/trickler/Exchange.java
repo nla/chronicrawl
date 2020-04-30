@@ -23,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -36,7 +35,7 @@ public class Exchange implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
     final Crawl crawl;
     private final Origin origin;
-    private final Location location;
+    final Location location;
     private final Location via;
     final FileChannel bufferFile;
     final Instant date = Instant.now();
@@ -193,7 +192,21 @@ public class Exchange implements Closeable {
         String contentType = httpResponse == null ? null : httpResponse.contentType().base().toString();
         Long contentLength = httpResponse == null ? null : httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
         crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
-        crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)), etag(), lastModified());
+
+        String etag = location.etag();
+        Instant lastModified = location.lastModified();
+        UUID etagResponseId = location.etagResponseId;
+        Instant etagDate = location.etagDate;
+        if (hadSuccessStatus()) {
+            etag = httpResponse.headers().first("ETag").orElse(null);
+            lastModified = httpResponse.headers().first("Last-Modified")
+                    .map(s -> RFC_1123_DATE_TIME.parse(s, Instant::from)).orElse(null);
+            etagResponseId = responseId;
+            etagDate = date;
+            crawl.db.updateLocationEtag(location.url().id(), etag, lastModified, etagResponseId, etagDate);
+        }
+
+        crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)));
         crawl.db.insertVisit(httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType, responseId);
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
                 location.url(), location.type(), via != null ? via.url() : "-", contentType != null ? contentType : "-");
@@ -209,27 +222,6 @@ public class Exchange implements Closeable {
 
     private boolean hadSuccessStatus() {
         return fetchStatus >= 200 && fetchStatus <= 299;
-    }
-
-    private String etag() {
-        if (hadSuccessStatus()) {
-            return httpResponse.headers().first("ETag").orElse(location.etag());
-        } else {
-            return location.etag();
-        }
-    }
-
-    private Instant lastModified() {
-        if (hadSuccessStatus()) {
-            try {
-                return httpResponse.headers().first("Last-Modified")
-                        .map(s -> RFC_1123_DATE_TIME.parse(s, Instant::from)).orElse(location.lastModified());
-            } catch (DateTimeParseException e) {
-                return null;
-            }
-        } else {
-            return location.lastModified();
-        }
     }
 
     @Override

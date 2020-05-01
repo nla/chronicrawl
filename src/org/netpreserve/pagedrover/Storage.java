@@ -49,7 +49,7 @@ public class Storage implements Closeable {
         warcWriter.write(new Warcinfo.Builder()
                 .recordId(warcId)
                 .date(date)
-                .fields(Map.of("software", List.of("trickler/" + Config.version())))
+                .fields(Map.of("software", List.of("PageDrover/" + Config.version())))
                 .build());
         db.insertWarc(warcId, warcPath.toString(), date);
     }

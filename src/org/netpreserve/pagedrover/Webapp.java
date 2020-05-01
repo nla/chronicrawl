@@ -132,7 +132,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         private final PebbleTemplate template;
 
         View() {
-            this.template = pebble.getTemplate("trickler/templates/" + name() + ".peb");
+            this.template = pebble.getTemplate("org/netpreserve/pagedrover/templates/" + name() + ".peb");
         }
 
         public Response render(Object... keysAndValues) {

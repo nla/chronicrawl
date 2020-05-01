@@ -31,7 +31,7 @@ public class Config {
     int uiPort = 8080;
 
     /** User-Agent header to send to the server */
-    String userAgent = "trickler/" + version();
+    String userAgent = "PageDrover/" + version();
 
     /** Maximum number of bytes to read from robots.txt */
     int maxRobotsBytes = 512 * 1024;

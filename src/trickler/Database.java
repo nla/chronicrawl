@@ -18,6 +18,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -162,9 +163,9 @@ public class Database implements AutoCloseable {
         query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(id, path, created).run();
     }
 
-    public void insertRecord(UUID id, long locationId, Instant date, String type, UUID warcId, long position) {
-        query.update("INSERT INTO record (id, location_id, date, type, warc_id, position) VALUES (?, ?, ?, ?, ?, ?)")
-                .params(id, locationId, date, type, warcId, position).run();
+    public void insertRecord(UUID id, long locationId, Instant date, String type, UUID warcId, long position, byte[] payloadDigest) {
+        query.update("INSERT INTO record (id, location_id, date, type, warc_id, position, payload_digest) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                .params(id, locationId, date, type, warcId, position, payloadDigest).run();
     }
 
     public RecordLocation locateRecord(UUID recordId) {
@@ -188,6 +189,21 @@ public class Database implements AutoCloseable {
         return query.select("SELECT * FROM visit WHERE location_id = ? ORDER BY date DESC LIMIT 100")
                 .params(locationId)
                 .listResult(Mappers.map());
+    }
+
+    public Optional<IdDate> findResponseWithPayloadDigest(long locationId, byte[] payloadDigest) {
+        return query.select("SELECT * FROM record WHERE location_id = ? AND type = 'response' AND payload_digest = ? ORDER BY date DESC LIMIT 1")
+                .params(locationId, payloadDigest).firstResult(IdDate::new);
+    }
+
+    static class IdDate {
+        final UUID id;
+        final Instant date;
+
+        IdDate(ResultSet rs) throws SQLException {
+            id = rs.getObject("id", UUID.class);
+            date = rs.getObject("date", Instant.class);
+        }
     }
 
     static class RecordLocation {

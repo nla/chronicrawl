@@ -2,10 +2,7 @@ package trickler;
 
 import crawlercommons.robots.SimpleRobotRules;
 import crawlercommons.robots.SimpleRobotRulesParser;
-import org.netpreserve.jwarc.HttpRequest;
-import org.netpreserve.jwarc.HttpResponse;
-import org.netpreserve.jwarc.LengthedBody;
-import org.netpreserve.jwarc.MessageVersion;
+import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import trickler.browser.Tab;
@@ -13,6 +10,7 @@ import trickler.browser.Tab;
 import javax.xml.stream.XMLStreamException;
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -21,6 +19,8 @@ import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -46,6 +46,8 @@ public class Exchange implements Closeable {
     InetAddress ip;
     private int fetchStatus;
     UUID responseId;
+    byte[] digest;
+    long bodyLength;
 
     public Exchange(Crawl crawl, Origin origin, Location location) throws IOException {
         this.crawl = crawl;
@@ -79,10 +81,10 @@ public class Exchange implements Closeable {
                 .addHeader("User-Agent", crawl.config.userAgent)
                 .addHeader("Connection", "close")
                 .version(MessageVersion.HTTP_1_0);
-        if (location.etag() != null) {
+        if (crawl.config.dedupeServer && location.etag() != null) {
             builder.addHeader("If-None-Match", location.etag());
         }
-        if (location.lastModified() != null) {
+        if (crawl.config.dedupeServer && location.lastModified() != null) {
             builder.addHeader("If-Modified-Since", RFC_1123_DATE_TIME.format(location.lastModified()));
         }
         if (via != null) {
@@ -99,11 +101,28 @@ public class Exchange implements Closeable {
         bufferFile.position(0);
         httpResponse = HttpResponse.parse(LengthedBody.create(bufferFile, ByteBuffer.allocate(8192).flip(), bufferFile.size()));
         fetchStatus = httpResponse.status();
+        long bodyLength = 0;
+        try {
+            InputStream stream = httpResponse.body().stream();
+            MessageDigest digest = MessageDigest.getInstance(crawl.config.warcDigestAlgorithm);
+            byte[] buffer = new byte[8192];
+            while (true) {
+                int n = stream.read(buffer);
+                if (n < 0) break;
+                digest.update(buffer, 0, n);
+                bodyLength += n;
+            }
+            this.digest = digest.digest();
+            this.bodyLength = bodyLength;
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException("Calculating " + crawl.config.warcDigestAlgorithm + " digest", e);
+        }
     }
 
     private void process() throws IOException {
         bufferFile.position(0);
-        httpResponse = HttpResponse.parse(LengthedBody.create(bufferFile, ByteBuffer.allocate(8192).flip(), bufferFile.size()));
+        httpResponse = HttpResponse.parse(bufferFile);
+
         try {
             if (hadSuccessStatus()) {
                 switch (location.type()) {
@@ -186,24 +205,16 @@ public class Exchange implements Closeable {
         crawl.db.tryInsertLink(location.url().id(), targetUrl.id());
     }
 
-
-
     private void finish() {
         String contentType = httpResponse == null ? null : httpResponse.contentType().base().toString();
         Long contentLength = httpResponse == null ? null : httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
         crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
 
-        String etag = location.etag();
-        Instant lastModified = location.lastModified();
-        UUID etagResponseId = location.etagResponseId;
-        Instant etagDate = location.etagDate;
         if (hadSuccessStatus()) {
-            etag = httpResponse.headers().first("ETag").orElse(null);
-            lastModified = httpResponse.headers().first("Last-Modified")
+            String etag = httpResponse.headers().first("ETag").orElse(null);
+            Instant lastModified = httpResponse.headers().first("Last-Modified")
                     .map(s -> RFC_1123_DATE_TIME.parse(s, Instant::from)).orElse(null);
-            etagResponseId = responseId;
-            etagDate = date;
-            crawl.db.updateLocationEtag(location.url().id(), etag, lastModified, etagResponseId, etagDate);
+            crawl.db.updateLocationEtag(location.url().id(), etag, lastModified, responseId, date);
         }
 
         crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)));

@@ -48,12 +48,13 @@ CREATE TABLE warc
 
 CREATE TABLE record
 (
-    id          UUID                                                                          NOT NULL PRIMARY KEY,
-    location_id BIGINT                                                                        NOT NULL,
-    date        TIMESTAMP                                                                     NOT NULL,
-    type        ENUM ('warcinfo', 'request', 'response', 'revisit', 'metadata', 'conversion') NOT NULL,
-    warc_id     UUID                                                                          NOT NULL,
-    position    BIGINT                                                                        NOT NULL,
+    id             UUID                                                                          NOT NULL PRIMARY KEY,
+    location_id    BIGINT                                                                        NOT NULL,
+    date           TIMESTAMP                                                                     NOT NULL,
+    type           ENUM ('warcinfo', 'request', 'response', 'revisit', 'metadata', 'conversion') NOT NULL,
+    warc_id        UUID                                                                          NOT NULL,
+    position       BIGINT                                                                        NOT NULL,
+    payload_digest VARBINARY(128)                                                                NULL,
     FOREIGN KEY (warc_id) REFERENCES warc (id) ON DELETE CASCADE
 );
 

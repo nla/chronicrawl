@@ -42,6 +42,9 @@ public class Config {
     /** Maximum delay between requests */
     long maxDelayMillis = 30;
 
+    /** Digest algorithm to use when calculating payload digest */
+    String warcDigestAlgorithm = "sha1";
+
     /** Template for construct WARC filenames. Variables: {TIMESTAMP} {SEQNO} */
     String warcFilename = "data/trickler-{TIMESTAMP}-{SEQNO}.warc.gz";
 
@@ -50,6 +53,12 @@ public class Config {
 
     /** Maximum length of a WARC file before a new one is created */
     long warcMaxLengthBytes = 1024 * 1024 * 1024; // 1 GiB
+
+    /** Write revisit records by giving the server an etag or last-modified and it returns status 304 */
+    boolean dedupeServer = true;
+
+    /** Write revisit records when the payload digest is unmodified */
+    boolean dedupeDigest = true;
 
     static String version() {
         InputStream stream = Config.class.getResourceAsStream("/META-INF/maven/org.netpreserve/trickler/pom.properties");

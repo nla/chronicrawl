@@ -1,0 +1,8 @@
+<!doctype html>
+<meta charset=utf-8>
+<style>
+    a { text-decoration: none; }
+    a:hover { text-decoration: underline; }
+</style>
+<title>{% block title %}Home{% endblock %} - PageDrover</title>
+{% block content %}Missing content block!{% endblock %}

@@ -1,6 +1,6 @@
 # PageDrover [<img src="https://upload.wikimedia.org/wikipedia/en/3/34/Heysen_Droving.jpg" align="right" width="300px" title="Droving into the Light, Hans Heysen">](https://en.wikipedia.org/wiki/File:Heysen_Droving.jpg)
 
-PageDrover is a work in progress continuous web crawler for web archiving.
+PageDrover is an experimental continuous web crawler for web archiving.
 
 ## Status
 

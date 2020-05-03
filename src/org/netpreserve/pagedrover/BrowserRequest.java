@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover.browser;
+package org.netpreserve.pagedrover;
 
 import com.grack.nanojson.JsonObject;
 import org.netpreserve.jwarc.WarcResponse;
@@ -8,15 +8,15 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.*;
 
-public class PausedRequest {
-    private static final Logger log = LoggerFactory.getLogger(PausedRequest.class);
+public class BrowserRequest {
+    private static final Logger log = LoggerFactory.getLogger(BrowserRequest.class);
 
-    private final Tab tab;
+    private final BrowserTab tab;
     private final String id;
     private final JsonObject request;
     boolean handled = false;
 
-    PausedRequest(Tab tab, String id, JsonObject request) {
+    BrowserRequest(BrowserTab tab, String id, JsonObject request) {
         this.tab = tab;
         this.id = id;
         this.request = request;

@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover.browser;
+package org.netpreserve.pagedrover;
 
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
@@ -193,8 +193,8 @@ public class Browser implements Closeable {
         }
     }
 
-    public Tab createTab() {
-        return new Tab(this);
+    public BrowserTab createTab() {
+        return new BrowserTab(this);
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {

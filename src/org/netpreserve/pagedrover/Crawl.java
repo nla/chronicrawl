@@ -2,7 +2,6 @@ package org.netpreserve.pagedrover;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.netpreserve.pagedrover.browser.Browser;
 
 import java.io.Closeable;
 import java.io.IOException;

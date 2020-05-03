@@ -1,6 +1,8 @@
 package org.netpreserve.pagedrover.browser;
 
 import org.junit.Test;
+import org.netpreserve.pagedrover.Browser;
+import org.netpreserve.pagedrover.BrowserTab;
 import org.netpreserve.pagedrover.TestServer;
 
 import java.io.IOException;
@@ -16,7 +18,7 @@ public class BrowserTest {
     public void test() throws IOException, InterruptedException, ExecutionException {
         try (TestServer server = new TestServer();
              Browser browser = assumeNewBrowser();
-             Tab tab = browser.createTab()) {
+             BrowserTab tab = browser.createTab()) {
 
             tab.interceptRequests(request -> {
                 System.out.println(request);

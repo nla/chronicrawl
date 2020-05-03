@@ -5,7 +5,6 @@ import crawlercommons.robots.SimpleRobotRulesParser;
 import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.netpreserve.pagedrover.browser.Tab;
 
 import javax.xml.stream.XMLStreamException;
 import java.io.Closeable;
@@ -162,7 +161,7 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() {
-        try (Tab tab = crawl.browser.createTab()) {
+        try (BrowserTab tab = crawl.browser.createTab()) {
             tab.interceptRequests(request -> {
                 try {
                     Url url = new Url(request.url());

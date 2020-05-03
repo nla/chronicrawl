@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover.browser;
+package org.netpreserve.pagedrover;
 
 public class BrowserException extends RuntimeException {
     public BrowserException(String message) {

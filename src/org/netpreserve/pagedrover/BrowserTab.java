@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover.browser;
+package org.netpreserve.pagedrover;
 
 import com.grack.nanojson.JsonObject;
 import org.slf4j.Logger;
@@ -14,16 +14,16 @@ import java.util.function.Consumer;
 /**
  * Notionally a browser tab. At the protocol level this a devtools 'target'.
  */
-public class Tab implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(Tab.class);
+public class BrowserTab implements Closeable {
+    private static final Logger log = LoggerFactory.getLogger(BrowserTab.class);
     private final Browser browser;
     private final String targetId;
     private final String sessionId;
-    private Consumer<PausedRequest> requestInterceptor;
+    private Consumer<BrowserRequest> requestInterceptor;
     private CompletableFuture<Double> loadFuture;
     private boolean closed;
 
-    Tab(Browser browser) {
+    BrowserTab(Browser browser) {
         this.browser = browser;
         targetId = browser.call("Target.createTarget",  Map.of("url", "about:blank")).getString("targetId");
         sessionId = browser.call("Target.attachToTarget", Map.of("targetId", targetId, "flatten", true)).getString("sessionId");
@@ -42,7 +42,7 @@ public class Tab implements Closeable {
         JsonObject params = event.getObject("params");
         switch (event.getString("method")) {
             case "Fetch.requestPaused":
-                PausedRequest request = new PausedRequest(this, params.getString("requestId"), params.getObject("request"));
+                BrowserRequest request = new BrowserRequest(this, params.getString("requestId"), params.getObject("request"));
                 if (requestInterceptor != null) {
                     try {
                         requestInterceptor.accept(request);
@@ -75,7 +75,7 @@ public class Tab implements Closeable {
         }
     }
 
-    public void interceptRequests(Consumer<PausedRequest> requestHandler) {
+    public void interceptRequests(Consumer<BrowserRequest> requestHandler) {
         this.requestInterceptor = requestHandler;
         call("Fetch.enable", Map.of());
     }

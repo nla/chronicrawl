@@ -98,7 +98,10 @@ public class Database implements AutoCloseable {
     }
 
     public UUID selectLastResponseRecordId(String method, long locationId) {
-        return query.select("SELECT response_id FROM visit WHERE method = ? AND location_id = ? ORDER BY date DESC LIMIT 1")
+        return query.select("SELECT v.response_id FROM visit v " +
+                "LEFT JOIN record r ON r.id = v.response_id " +
+                "WHERE v.method = ? AND v.location_id = ? AND r.type = 'response' " +
+                "ORDER BY v.date DESC LIMIT 1")
                 .params(method, locationId)
                 .firstResult(rs -> (UUID)rs.getObject("response_id"))
                 .orElse(null);

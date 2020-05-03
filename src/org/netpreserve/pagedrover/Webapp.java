@@ -8,11 +8,13 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.net.SocketException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Logger;
 
 import static fi.iki.elonen.NanoHTTPD.Response.Status.*;
 
@@ -22,6 +24,13 @@ public class Webapp extends NanoHTTPD implements Closeable {
             .build();
 
     private final Crawl crawl;
+
+
+    static {
+        // suppress annoying Broken pipe exception logging
+        Logger.getLogger(NanoHTTPD.class.getName()).setFilter(r -> !(r.getThrown() instanceof SocketException)
+                || !r.getThrown().getMessage().contains("Broken pipe"));
+    }
 
     public Webapp(Crawl crawl, int port) throws IOException {
         super(port);

@@ -66,7 +66,7 @@ CREATE TABLE visit
     status         SMALLINT     NOT NULL,
     content_type   VARCHAR(128) NULL,
     content_length BIGINT       NULL,
-    response_id    UUID         NOT NULL,
+    response_id    UUID         NULL,
     PRIMARY KEY (location_id, date),
     FOREIGN KEY (location_id) REFERENCES location (id) ON DELETE CASCADE
 );

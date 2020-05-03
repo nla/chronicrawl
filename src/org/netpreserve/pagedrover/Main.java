@@ -2,9 +2,12 @@ package org.netpreserve.pagedrover;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
-public class Trickler {
+public class Main {
     public static void main(String[] args) throws IOException {
+        List<String> seeds = new ArrayList<>();
         boolean initDb = false;
         Config config = new Config();
         for (int i = 0; i < args.length; i++) {
@@ -29,12 +32,19 @@ public class Trickler {
                     System.out.println(Config.version());
                     System.exit(0);
                     break;
+                default:
+                    if (args[i].startsWith("-")) {
+                        System.err.println("Unknown option: " + args[i]);
+                        System.exit(1);
+                    }
+                    seeds.add(args[i]);
             }
         }
         Database db = new Database();
         if (initDb) db.init();
         try (Crawl crawl = new Crawl(config, db);
              Webapp webapp = new Webapp(crawl, crawl.config.uiPort)) {
+            seeds.forEach(crawl::addSeed);
             crawl.run();
         }
     }

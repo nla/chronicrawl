@@ -23,6 +23,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -40,11 +41,10 @@ public class Exchange implements Closeable {
     final FileChannel bufferFile;
     final Instant date = Instant.now();
     final Url url;
-    private Instant fetchCompleteTime;
     HttpRequest httpRequest;
     HttpResponse httpResponse;
     InetAddress ip;
-    private int fetchStatus;
+    int fetchStatus;
     UUID responseId;
     byte[] digest;
     long bodyLength;
@@ -62,7 +62,11 @@ public class Exchange implements Closeable {
 
     public void run() throws IOException {
         if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url().toString())) {
-            fetch();
+            try {
+                fetch();
+            } catch (IOException e) {
+                fetchStatus = -2;
+            }
             crawl.storage.save(this);
             finish();
         } else {
@@ -85,18 +89,18 @@ public class Exchange implements Closeable {
             builder.addHeader("If-None-Match", location.etag());
         }
         if (crawl.config.dedupeServer && location.lastModified() != null) {
-            builder.addHeader("If-Modified-Since", RFC_1123_DATE_TIME.format(location.lastModified()));
+            builder.addHeader("If-Modified-Since", RFC_1123_DATE_TIME.withZone(ZoneOffset.UTC).format(location.lastModified()));
         }
         if (via != null) {
             builder.addHeader("Referer", via.url().toString());
         }
+        log.info("Fetching {}", url);
         httpRequest = builder.build();
         try (Socket socket = url.connect()) {
             ip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getAddress();
             socket.getOutputStream().write(httpRequest.serializeHeader());
             socket.getInputStream().transferTo(Channels.newOutputStream(bufferFile));
         } finally {
-            fetchCompleteTime = Instant.now();
         }
         bufferFile.position(0);
         httpResponse = HttpResponse.parse(LengthedBody.create(bufferFile, ByteBuffer.allocate(8192).flip(), bufferFile.size()));
@@ -201,6 +205,9 @@ public class Exchange implements Closeable {
     }
 
     private void enqueue(Url targetUrl, Location.Type type, int priority) {
+        if (crawl.db.tryInsertOrigin(targetUrl.originId(), targetUrl.origin(), date)) {
+
+        }
         crawl.db.tryInsertLocation(targetUrl, type, location.url().id(), date, priority);
         crawl.db.tryInsertLink(location.url().id(), targetUrl.id());
     }

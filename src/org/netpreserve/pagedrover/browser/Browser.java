@@ -14,6 +14,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -35,8 +36,10 @@ public class Browser implements Closeable {
         Process process = null;
         for (String executable : executables) {
             try {
-                process = new ProcessBuilder(executable, "--headless", "--remote-debugging-port=0",
-                        "--enable-logging=stderr", "--v=1")
+                var cmd = new ArrayList<String>();
+                cmd.addAll(List.of(executable, "--headless", "--remote-debugging-port=0"));
+                if (System.getenv("BROWSER_LOGGING") != null) cmd.addAll(List.of("--enable-logging=stderr", "--v=1"));
+                process = new ProcessBuilder(cmd)
                         .inheritIO()
                         .redirectError(ProcessBuilder.Redirect.PIPE)
                         .start();

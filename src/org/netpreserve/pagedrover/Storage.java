@@ -47,6 +47,7 @@ public class Storage implements Closeable {
         warcId = UuidCreator.getTimeOrdered();
         Instant date = Instant.now();
         warcWriter.write(new Warcinfo.Builder()
+                .version(MessageVersion.WARC_1_1)
                 .recordId(warcId)
                 .date(date)
                 .fields(Map.of("software", List.of("PageDrover/" + Config.version())))
@@ -62,9 +63,10 @@ public class Storage implements Closeable {
     }
 
     synchronized void save(Exchange exchange) throws IOException {
-        if (exchange.httpRequest != null) {
+        if (exchange.fetchStatus > 0 && exchange.httpRequest != null) {
             UUID requestId = UuidCreator.getTimeOrdered();
             WarcRequest request = new WarcRequest.Builder(exchange.url.toURI())
+                    .version(MessageVersion.WARC_1_1)
                     .recordId(requestId)
                     .date(exchange.date)
                     .body(exchange.httpRequest)
@@ -92,6 +94,7 @@ public class Storage implements Closeable {
     private WarcCaptureRecord buildResponse(UUID responseId, Exchange exchange, WarcRequest request) throws IOException {
         if (config.dedupeServer && exchange.httpResponse.status() == 304 && exchange.location.etagResponseId != null) {
             return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.SERVER_NOT_MODIFIED_1_1)
+                    .version(MessageVersion.WARC_1_1)
                     .recordId(responseId)
                     .date(exchange.date)
                     .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
@@ -104,6 +107,7 @@ public class Storage implements Closeable {
         var duplicate = db.findResponseWithPayloadDigest(exchange.url.id(), exchange.digest);
         if (config.dedupeDigest && duplicate.isPresent()) {
             return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.IDENTICAL_PAYLOAD_DIGEST_1_1)
+                    .version(MessageVersion.WARC_1_1)
                     .recordId(responseId)
                     .date(exchange.date)
                     .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
@@ -114,6 +118,7 @@ public class Storage implements Closeable {
         }
 
         return new WarcResponse.Builder(exchange.url.toURI())
+                .version(MessageVersion.WARC_1_1)
                 .recordId(responseId)
                 .date(exchange.date)
                 .body(MediaType.HTTP_RESPONSE, exchange.bufferFile, exchange.bufferFile.size())

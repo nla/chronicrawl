@@ -8,10 +8,7 @@ import org.netpreserve.urlcanon.ParsedUrl;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.MalformedURLException;
-import java.net.Socket;
-import java.net.URI;
-import java.net.URL;
+import java.net.*;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
@@ -63,7 +60,13 @@ public class Url {
     }
 
     public URI toURI() {
-        return URI.create(toString());
+        try {
+            return new URI(parsed.getScheme(), null,
+                    parsed.getHost(), parsed.getPort().isBlank() ? 0 : Integer.parseInt(parsed.getPort()), parsed.getPath(),
+                    parsed.getQuestionMark().isEmpty() ? null : parsed.getQuery(), null);
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException(e);
+        }
     }
 
     public String scheme() {

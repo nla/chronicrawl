@@ -24,7 +24,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 import static java.nio.file.StandardOpenOption.*;
@@ -32,8 +32,13 @@ import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 import static org.netpreserve.pagedrover.Location.Type.TRANSCLUSION;
 
 public class Exchange implements Closeable {
-    public static final int STATUS_ROBOTS_DISALLOWED = -9998;
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
+    private static Set<String> IGNORED_EXTRA_HEADERS = Set.of(
+            "content-length", "connection", "transfer-encoding", "host", "user-agent", "if-none-match",
+            "if-modified-since", "referer", "te", "keep-alive", "proxy-authenticate", "proxy-authorization",
+            "ugprade-insecure-requests", "accept-encoding"
+    );
+
     final Crawl crawl;
     private final Origin origin;
     final Location location;
@@ -41,6 +46,9 @@ public class Exchange implements Closeable {
     final FileChannel bufferFile;
     final Instant date = Instant.now();
     final Url url;
+    final String method;
+    final Map<String, String> extraHeaders;
+    public UUID revisitOf;
     HttpRequest httpRequest;
     HttpResponse httpResponse;
     InetAddress ip;
@@ -49,10 +57,12 @@ public class Exchange implements Closeable {
     byte[] digest;
     long bodyLength;
 
-    public Exchange(Crawl crawl, Origin origin, Location location) throws IOException {
+    public Exchange(Crawl crawl, Origin origin, Location location, String method, Map<String, String> extraHeaders) throws IOException {
         this.crawl = crawl;
         this.origin = origin;
         this.location = location;
+        this.method = method;
+        this.extraHeaders = extraHeaders;
         Path tempFile = Files.createTempFile("pagedrover", ".tmp");
         bufferFile = FileChannel.open(tempFile, READ, WRITE, DELETE_ON_CLOSE, TRUNCATE_EXISTING);
         url = location.url();
@@ -62,15 +72,11 @@ public class Exchange implements Closeable {
 
     public void run() throws IOException {
         if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url().toString())) {
-            try {
-                fetch();
-            } catch (IOException e) {
-                fetchStatus = -2;
-            }
+            fetch();
             crawl.storage.save(this);
             finish();
         } else {
-            fetchStatus = STATUS_ROBOTS_DISALLOWED;
+            fetchStatus = Status.ROBOTS_DISALLOWED;
         }
         process();
     }
@@ -80,7 +86,7 @@ public class Exchange implements Closeable {
     }
 
     void fetch() throws IOException {
-        HttpRequest.Builder builder = new HttpRequest.Builder("GET", url.target())
+        HttpRequest.Builder builder = new HttpRequest.Builder(method, url.target())
                 .addHeader("Host", url.hostInfo())
                 .addHeader("User-Agent", crawl.config.userAgent)
                 .addHeader("Connection", "close")
@@ -94,13 +100,22 @@ public class Exchange implements Closeable {
         if (via != null) {
             builder.addHeader("Referer", via.url().toString());
         }
+        for (var entry: extraHeaders.entrySet()) {
+            if (!IGNORED_EXTRA_HEADERS.contains(entry.getKey().toLowerCase(Locale.ROOT))) {
+                builder.setHeader(entry.getKey(), entry.getValue());
+            }
+        }
+
         log.info("Fetching {}", url);
         httpRequest = builder.build();
         try (Socket socket = url.connect()) {
             ip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getAddress();
             socket.getOutputStream().write(httpRequest.serializeHeader());
             socket.getInputStream().transferTo(Channels.newOutputStream(bufferFile));
-        } finally {
+        } catch (IOException e) {
+            log.warn("Error fetching " + url, e);
+            fetchStatus = Status.CONNECT_FAILED;
+            return;
         }
         bufferFile.position(0);
         httpResponse = HttpResponse.parse(LengthedBody.create(bufferFile, ByteBuffer.allocate(8192).flip(), bufferFile.size()));
@@ -128,7 +143,7 @@ public class Exchange implements Closeable {
         httpResponse = HttpResponse.parse(bufferFile);
 
         try {
-            if (hadSuccessStatus()) {
+            if (Status.isSuccess(fetchStatus)) {
                 switch (location.type()) {
                     case ROBOTS:
                         processRobots();
@@ -152,6 +167,9 @@ public class Exchange implements Closeable {
                 try {
                     Url url = new Url(request.url());
                     System.out.println(url);
+                    if (!request.method().equals("GET")) {
+                        throw new IOException("TODO: " + request.method() + " subrequests");
+                    }
                     UUID lastVisitResponseId = crawl.db.selectLastResponseRecordId(request.method(), url.id());
                     if (lastVisitResponseId == null) {
                         enqueue(url, TRANSCLUSION, 40);
@@ -160,9 +178,13 @@ public class Exchange implements Closeable {
                             throw new IOException("Forbidden by crawl policy");
                         }
                         Location location = crawl.db.selectLocationById(url.id());
-                        try (Exchange subexchange = new Exchange(crawl, origin, location)) {
+                        try (Exchange subexchange = new Exchange(crawl, origin, location, request.method(), request.headers())) {
                             subexchange.run();
-                            lastVisitResponseId = subexchange.responseId;
+                            if (subexchange.revisitOf != null) {
+                                lastVisitResponseId = subexchange.revisitOf;
+                            } else {
+                                lastVisitResponseId = subexchange.responseId;
+                            }
                         }
                     }
                     crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
@@ -217,7 +239,7 @@ public class Exchange implements Closeable {
         Long contentLength = httpResponse == null ? null : httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
         crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
 
-        if (hadSuccessStatus()) {
+        if (Status.isSuccess(fetchStatus)) {
             String etag = httpResponse.headers().first("ETag").orElse(null);
             Instant lastModified = httpResponse.headers().first("Last-Modified")
                     .map(s -> RFC_1123_DATE_TIME.parse(s, Instant::from)).orElse(null);
@@ -232,14 +254,10 @@ public class Exchange implements Closeable {
     }
 
     private long calcDelayMillis() {
-        if (fetchStatus == STATUS_ROBOTS_DISALLOWED) return 0;
+        if (fetchStatus == Status.ROBOTS_DISALLOWED) return 0;
         long delay = origin.robotsCrawlDelay != null ? origin.robotsCrawlDelay * 1000 : 5000;
         if (delay > crawl.config.maxDelayMillis) delay = crawl.config.maxDelayMillis;
         return delay;
-    }
-
-    private boolean hadSuccessStatus() {
-        return fetchStatus >= 200 && fetchStatus <= 299;
     }
 
     @Override

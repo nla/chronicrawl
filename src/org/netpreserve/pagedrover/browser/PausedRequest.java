@@ -2,11 +2,15 @@ package org.netpreserve.pagedrover.browser;
 
 import com.grack.nanojson.JsonObject;
 import org.netpreserve.jwarc.WarcResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
 
 public class PausedRequest {
+    private static final Logger log = LoggerFactory.getLogger(PausedRequest.class);
+
     private final Tab tab;
     private final String id;
     private final JsonObject request;
@@ -39,8 +43,16 @@ public class PausedRequest {
                 headers.add(new AbstractMap.SimpleEntry<>(entry.getKey(), value));
             }
         }
-        fulfill(warcResponse.http().status(), warcResponse.http().reason().trim(),
-                headers, warcResponse.http().body().stream().readNBytes(100 * 1024 * 1024));
+        try {
+            fulfill(warcResponse.http().status(), warcResponse.http().reason().trim(),
+                    headers, warcResponse.http().body().stream().readNBytes(100 * 1024 * 1024));
+        } catch (BrowserException e) {
+            if (e.getMessage().equals("Fetch.fulfillRequest: Invalid InterceptionId.")) {
+                log.trace("Request cancelled {} {}", id, url());
+            } else {
+                throw e;
+            }
+        }
     }
 
     public void fulfill(int status, String reason, Collection<Map.Entry<String, String>> headers, byte[] body) {
@@ -49,11 +61,13 @@ public class PausedRequest {
         for (var entry: headers) {
             headerList.add(Map.of("name", entry.getKey(), "value", entry.getValue()));
         }
-        tab.call("Fetch.fulfillRequest", Map.of("requestId", id,
-                "responseCode", status,
-                "responsePhrase", reason,
-                "responseHeaders", headerList,
-                "body", Base64.getEncoder().encodeToString(body)));
+        Map<String, Object> params = new HashMap<>();
+        params.put("requestId", id);
+        params.put("responseCode", status);
+        if (!reason.isBlank()) params.put("responsePhrase", reason);
+        params.put("responseHeaders", headerList);
+        params.put("body", Base64.getEncoder().encodeToString(body));
+        tab.call("Fetch.fulfillRequest", params);
     }
 
     public void continueNormally() {

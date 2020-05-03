@@ -63,6 +63,7 @@ public class Browser implements Closeable {
     private class WebSocket extends WebSocketClient {
         public WebSocket(URI uri) {
             super(uri);
+            setConnectionLostTimeout(-1); // Chrome doesn't respond to WebSocket pings
         }
 
         public void onOpen(ServerHandshake handshakeData) {
@@ -94,7 +95,7 @@ public class Browser implements Closeable {
                     if (future == null) {
                         log.warn("Unexpected RPC response id {}", id);
                     } else if (message.has("error")) {
-                        future.completeExceptionally(new RuntimeException(message.getObject("error").getString("message")));
+                        future.completeExceptionally(new BrowserException(message.getObject("error").getString("message")));
                     } else {
                         future.complete(message.getObject("result"));
                     }
@@ -130,7 +131,7 @@ public class Browser implements Closeable {
                 .object("params", params)
                 .end()
                 .done();
-        log.trace("> {}", message.length() < 1024 ? message : message.substring(0, 1024) + "...");
+        log.trace("> {} {}", message.length(), message.length() < 1024 ? message : message.substring(0, 1024) + "...");
         var future = new CompletableFuture<JsonObject>();
         calls.put(id, future);
         websocket.send(message);
@@ -141,11 +142,7 @@ public class Browser implements Closeable {
         } catch (TimeoutException e) {
             throw new RuntimeException("Call timed out: " + message, e);
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof RuntimeException) {
-                throw (RuntimeException)e.getCause();
-            } else {
-                throw new RuntimeException(e.getCause());
-            }
+            throw new BrowserException(method + ": " + e.getCause().getMessage(), e.getCause());
         }
     }
 

@@ -8,6 +8,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -80,7 +81,7 @@ public class Crawl implements Closeable {
             db.updateOriginVisit(origin.id, Instant.now(), null);
             return;
         }
-        try (Exchange exchange = new Exchange(this, origin, location)) {
+        try (Exchange exchange = new Exchange(this, origin, location, "GET", Collections.emptyMap())) {
             exchange.run();
         }
     }

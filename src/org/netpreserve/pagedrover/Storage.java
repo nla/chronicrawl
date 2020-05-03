@@ -93,6 +93,7 @@ public class Storage implements Closeable {
 
     private WarcCaptureRecord buildResponse(UUID responseId, Exchange exchange, WarcRequest request) throws IOException {
         if (config.dedupeServer && exchange.httpResponse.status() == 304 && exchange.location.etagResponseId != null) {
+            exchange.revisitOf = exchange.location.etagResponseId;
             return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.SERVER_NOT_MODIFIED_1_1)
                     .version(MessageVersion.WARC_1_1)
                     .recordId(responseId)
@@ -106,6 +107,7 @@ public class Storage implements Closeable {
 
         var duplicate = db.findResponseWithPayloadDigest(exchange.url.id(), exchange.digest);
         if (config.dedupeDigest && duplicate.isPresent()) {
+            exchange.revisitOf = duplicate.get().id;
             return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.IDENTICAL_PAYLOAD_DIGEST_1_1)
                     .version(MessageVersion.WARC_1_1)
                     .recordId(responseId)
@@ -135,6 +137,7 @@ public class Storage implements Closeable {
             try (WarcReader warcReader = new WarcReader(channel)) {
                 WarcRecord record = warcReader.next().orElse(null);
                 if (record == null) throw new IOException("Record was missing");
+                if (!(record instanceof WarcResponse)) throw new IOException(recordId + " is a " + record.type() + " record not response");
                 consumer.accept((WarcResponse) record);
             }
         }

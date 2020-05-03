@@ -21,6 +21,7 @@ public class Tab implements Closeable {
     private final String sessionId;
     private Consumer<PausedRequest> requestInterceptor;
     private CompletableFuture<Double> loadFuture;
+    private boolean closed;
 
     Tab(Browser browser) {
         this.browser = browser;
@@ -31,6 +32,9 @@ public class Tab implements Closeable {
     }
 
     JsonObject call(String method, Map<String, Object> params) {
+        synchronized (this) {
+            if (closed) throw new IllegalStateException("closed");
+        }
         return browser.call(sessionId, method, params);
     }
 
@@ -63,9 +67,12 @@ public class Tab implements Closeable {
     }
 
     @Override
-    public void close() {
-        browser.call("Target.closeTarget", Map.of("targetId", targetId));
-        browser.sessionEventHandlers.remove(sessionId);
+    public synchronized void close() {
+        if (!closed) {
+            closed = true;
+            browser.call("Target.closeTarget", Map.of("targetId", targetId));
+            browser.sessionEventHandlers.remove(sessionId);
+        }
     }
 
     public void interceptRequests(Consumer<PausedRequest> requestHandler) {

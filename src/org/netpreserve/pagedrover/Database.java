@@ -25,19 +25,12 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 public class Database implements AutoCloseable {
     private final JdbcConnectionPool jdbcPool;
     private final Query query;
-    public final Locations locations = new Locations();
-    public final Origins origins = new Origins();
-    public final Records records = new Records();
-    public final Sessions sessions = new Sessions();
-    public final Visits visits = new Visits();
-
-    private final static String originFields = "id, name, robots_crawl_delay, next_visit, robots_txt, crawl_policy";
-    private final static Mapper<Origin> originMapper = rs -> new Origin(rs.getLong("id"),
-            rs.getString("name"),
-            getLongOrNull(rs, "robots_crawl_delay"),
-            getInstant(rs, "next_visit"),
-            rs.getBytes("robots_txt"),
-            CrawlPolicy.valueOfOrNull(rs.getString("crawl_policy")));
+    public final LocationDAO locations = new LocationDAO();
+    public final OriginDAO origins = new OriginDAO();
+    public final RecordDAO records = new RecordDAO();
+    public final SessionDAO sessions = new SessionDAO();
+    public final VisitDAO visits = new VisitDAO();
+    public final WarcDAO warcs = new WarcDAO();
 
     Database() {
         this("jdbc:h2:file:./data/db;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE", "sa", "");
@@ -62,17 +55,25 @@ public class Database implements AutoCloseable {
         jdbcPool.dispose();
     }
 
-    public class Origins {
+    public class OriginDAO {
+        private static final String fields = "id, name, robots_crawl_delay, next_visit, robots_txt, crawl_policy";
+        private final Mapper<Origin> mapper = rs -> new Origin(rs.getLong("id"),
+                rs.getString("name"),
+                getLongOrNull(rs, "robots_crawl_delay"),
+                getInstant(rs, "next_visit"),
+                rs.getBytes("robots_txt"),
+                CrawlPolicy.valueOfOrNull(rs.getString("crawl_policy")));
+
         public Origin find(long originId) {
-            return query.select("SELECT " + originFields + " FROM origin WHERE id = ?")
-                    .params(originId).firstResult(originMapper).orElse(null);
+            return query.select("SELECT " + fields + " FROM origin WHERE id = ?")
+                    .params(originId).firstResult(mapper).orElse(null);
         }
 
         public Origin next() {
-            return query.select("SELECT " + originFields + " FROM origin " +
+            return query.select("SELECT " + fields + " FROM origin " +
                     "WHERE (crawl_policy IS NULL OR crawl_policy = 'CONTINUOUS') AND next_visit IS NOT NULL " +
                     "ORDER BY next_visit ASC LIMIT 1")
-                    .firstResult(originMapper).orElse(null);
+                    .firstResult(mapper).orElse(null);
         }
 
         public boolean tryInsert(long id, String name, Instant discovered) {
@@ -89,8 +90,8 @@ public class Database implements AutoCloseable {
         }
     }
 
-    public class Locations {
-        private final String fields = "url, type, etag, last_modified, via, etag_response_id, etag_date";
+    public class LocationDAO {
+        private static final String fields = "url, type, etag, last_modified, via, etag_response_id, etag_date";
         private final Mapper<Location> mapper = rs -> new Location(new Url(rs.getString("url")),
                 Location.Type.valueOf(rs.getString("type")),
                 rs.getString("etag"),
@@ -132,7 +133,7 @@ public class Database implements AutoCloseable {
         }
     }
 
-    public class Visits {
+    public class VisitDAO {
         public Map<String, Object> find(UUID id) {
             return query.select("SELECT * FROM visit WHERE id = ?").params(id).singleResult(Mappers.map());
         }
@@ -149,7 +150,7 @@ public class Database implements AutoCloseable {
         }
     }
 
-    public class Records {
+    public class RecordDAO {
         public UUID lastResponseId(String method, long locationId) {
             return query.select("SELECT r.id FROM record r " +
                     "LEFT JOIN visit v ON v.id = r.visit_ID " +
@@ -183,7 +184,7 @@ public class Database implements AutoCloseable {
         }
     }
 
-    public class Sessions {
+    public class SessionDAO {
         public Optional<Webapp.Session> find(String sessionId) {
             return query.select("SELECT id, username, role, oidc_state, expiry FROM session WHERE id = ?").params(sessionId)
                     .firstResult((ResultSet rs) -> new Webapp.Session(
@@ -208,6 +209,12 @@ public class Database implements AutoCloseable {
         }
     }
 
+    public class WarcDAO {
+        public void insert(UUID id, String path, Instant created) {
+            query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(id, path, created).run();
+        }
+    }
+
     private void check(UpdateResult result) {
         if (result.affectedRows() == 0) {
             throw new IllegalArgumentException("update failed");
@@ -226,10 +233,6 @@ public class Database implements AutoCloseable {
 
     public void tryInsertLink(long src, long dst) {
         query.update("INSERT IGNORE INTO link (src, dst) VALUES (?, ?)").params(src, dst).run();
-    }
-
-    public void insertWarc(UUID id, String path, Instant created) {
-        query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(id, path, created).run();
     }
 
     public List<Map<String, Object>> paginateCrawlLog(Instant after, boolean pagesOnly, int limit) {

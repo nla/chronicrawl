@@ -52,7 +52,7 @@ public class Storage implements Closeable {
                 .date(date)
                 .fields(Map.of("software", List.of("PageDrover/" + Config.version())))
                 .build());
-        db.insertWarc(warcId, warcPath.toString(), date);
+        db.warcs.insert(warcId, warcPath.toString(), date);
     }
 
     private synchronized int nextSerial() {

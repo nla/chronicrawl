@@ -91,7 +91,7 @@ public class Storage implements Closeable {
         long offset = warcWriter.position();
         warcWriter.write(record);
         long length = warcWriter.position() - offset;
-        db.insertRecord(recordId, exchange.id, record.type(), warcId, offset, length, payloadDigest);
+        db.records.insert(recordId, exchange.id, record.type(), warcId, offset, length, payloadDigest);
     }
 
     private WarcCaptureRecord buildResponse(UUID responseId, Exchange exchange, WarcRequest request) throws IOException {
@@ -108,7 +108,7 @@ public class Storage implements Closeable {
                     .build();
         }
 
-        var duplicate = db.findResponseWithPayloadDigest(exchange.url.id(), exchange.digest);
+        var duplicate = db.records.findResponseByPayloadDigest(exchange.url.id(), exchange.digest);
         if (config.dedupeDigest && duplicate.isPresent()) {
             exchange.revisitOf = duplicate.get().id;
             return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.IDENTICAL_PAYLOAD_DIGEST_1_1)
@@ -134,7 +134,7 @@ public class Storage implements Closeable {
     }
 
     void readResponse(UUID recordId, Util.IOConsumer<WarcResponse> consumer) throws IOException {
-        var recordLocation = db.locateRecord(recordId);
+        var recordLocation = db.records.locate(recordId);
         try (FileChannel channel = FileChannel.open(Paths.get(recordLocation.path))) {
             channel.position(recordLocation.position);
             try (WarcReader warcReader = new WarcReader(channel)) {

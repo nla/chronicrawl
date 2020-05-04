@@ -25,19 +25,20 @@ public class Webapp extends NanoHTTPD implements Closeable {
             .strictVariables(true)
             .build();
     private static final SecureRandom random = new SecureRandom();
-    private final Crawl crawl;
 
-    static {
-        // suppress annoying Broken pipe exception logging
+    static { // suppress annoying Broken pipe exception logging
         Logger.getLogger(NanoHTTPD.class.getName()).setFilter(r -> !(r.getThrown() instanceof SocketException)
                 || !r.getThrown().getMessage().contains("Broken pipe"));
     }
 
+    private final Crawl crawl;
+    private final Database db;
     private JsonObject oidcConfig;
 
     public Webapp(Crawl crawl, int port) throws IOException {
         super(port);
         this.crawl = crawl;
+        this.db = crawl.db;
         start();
     }
 
@@ -107,8 +108,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return View.home.render();
                 case "GET /location":
                     Long locationId = paramLong("id");
-                    return View.location.render("location", crawl.db.selectLocationById(locationId),
-                            "visits", crawl.db.visitsForLocation(locationId));
+                    return View.location.render("location", db.locations.find(locationId),
+                            "visits", db.visits.findByLocationId(locationId));
                 case "POST /location/add":
                     String url = param("url");
                     crawl.addSeed(url);
@@ -117,19 +118,19 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     boolean subresources = request.getParameters().containsKey("subresources");
                     Timestamp after = Optional.ofNullable(param("after", null))
                             .map(Timestamp::valueOf).orElse(Timestamp.from(Instant.now()));
-                    return View.log.render("log", crawl.db.paginateCrawlLog(after.toInstant(), !subresources,100),
+                    return View.log.render("log", db.paginateCrawlLog(after.toInstant(), !subresources,100),
                             "subresources", subresources, "after", param("after", null));
                 case "GET /origin":
                     Long id = paramLong("id", null);
                     if (id == null) {
                         id = new Url(param("url")).originId();
                     }
-                    Origin origin = found(crawl.db.selectOriginById(id));
+                    Origin origin = found(db.origins.find(id));
                     return View.origin.render("origin", origin);
                 case "GET /visit":
                     UUID visitId = UUID.fromString(param("id"));
-                    return View.visit.render("visit", crawl.db.selectVisitById(visitId),
-                            "records", crawl.db.selectRecordsByVisitId(visitId));
+                    return View.visit.render("visit", db.visits.find(visitId),
+                            "records", db.records.findByVisitId(visitId));
                 default:
                     throw new NotFound();
             }
@@ -139,9 +140,9 @@ public class Webapp extends NanoHTTPD implements Closeable {
             if (crawl.config.oidcUrl == null) {
                 session = new Session(null, "anonymous", "admin", null, Instant.MAX);
             }
-            crawl.db.expireSesssions();
+            db.sessions.expire();
             String sessionId = request.getCookies().read(crawl.config.uiSessionCookie);
-            this.session = sessionId == null ? null : crawl.db.selectSessionById(sessionId).orElse(null);
+            this.session = sessionId == null ? null : db.sessions.find(sessionId).orElse(null);
             if (session != null && request.getUri().equals("/authcb") && param("state").equals(session.oidcState)) {
                 // exchange code for access token
                 var conn = (HttpURLConnection) new URL(oidcConfig().getString("token_endpoint")).openConnection();
@@ -174,14 +175,14 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     JsonObject cli = ra == null ? null : ra.getObject(crawl.config.oidcClientId);
                     JsonArray roles = cli == null ? null : cli.getArray("roles");
                     String role = roles != null && roles.contains("admin") ? "admin" : "anonymous";
-                    crawl.db.updateSessionUsername(sessionId, info.getString("preferred_username"), role);
+                    db.sessions.update(sessionId, info.getString("preferred_username"), role);
                 }
                 return seeOther("/");
             } else if (session == null || session.username == null) {
                 // create new session and redirect to auth server
                 String id = newSessionId();
                 String oidcState = newSessionId();
-                crawl.db.insertSession(id, oidcState, Instant.now().plusSeconds(crawl.config.uiSessionExpirySecs));
+                db.sessions.insert(id, oidcState, Instant.now().plusSeconds(crawl.config.uiSessionExpirySecs));
                 String endpoint = oidcConfig().getString("authorization_endpoint");
                 String redirectUri = contextUrl() + "/authcb";
                 Response response = seeOther(endpoint + "?response_type=code&client_id=" + URLEncoder.encode(crawl.config.oidcClientId, UTF_8) +

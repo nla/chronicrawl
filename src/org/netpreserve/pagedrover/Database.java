@@ -3,7 +3,6 @@ package org.netpreserve.pagedrover;
 import org.codejargon.fluentjdbc.api.FluentJdbc;
 import org.codejargon.fluentjdbc.api.FluentJdbcBuilder;
 import org.codejargon.fluentjdbc.api.mapper.Mappers;
-import org.codejargon.fluentjdbc.api.mapper.ObjectMappers;
 import org.codejargon.fluentjdbc.api.query.Mapper;
 import org.codejargon.fluentjdbc.api.query.Query;
 import org.codejargon.fluentjdbc.api.query.UpdateResult;
@@ -25,18 +24,13 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class Database implements AutoCloseable {
     private final JdbcConnectionPool jdbcPool;
-    private final FluentJdbc fluent;
     private final Query query;
-    private final ObjectMappers objectMappers = ObjectMappers.builder().build();
+    public final Locations locations = new Locations();
+    public final Origins origins = new Origins();
+    public final Records records = new Records();
+    public final Sessions sessions = new Sessions();
+    public final Visits visits = new Visits();
 
-    private final static String locationFields = "url, type, etag, last_modified, via, etag_response_id, etag_date";
-    private final static Mapper<Location> locationMapper = rs -> new Location(new Url(rs.getString("url")),
-            Location.Type.valueOf(rs.getString("type")),
-            rs.getString("etag"),
-            getInstant(rs, "last_modified"),
-            getLongOrNull(rs, "via"),
-            rs.getObject("etag_response_id", UUID.class),
-            getInstant(rs, "etag_date"));
     private final static String originFields = "id, name, robots_crawl_delay, next_visit, robots_txt, crawl_policy";
     private final static Mapper<Origin> originMapper = rs -> new Origin(rs.getLong("id"),
             rs.getString("name"),
@@ -51,7 +45,7 @@ public class Database implements AutoCloseable {
 
     Database(String url, String user, String password) {
         jdbcPool = JdbcConnectionPool.create(url, user, password);
-        fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
+        FluentJdbc fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
         query = fluent.query();
     }
 
@@ -68,79 +62,156 @@ public class Database implements AutoCloseable {
         jdbcPool.dispose();
     }
 
-    public boolean tryInsertOrigin(long id, String name, Instant discovered) {
-        return query.update("INSERT IGNORE INTO origin (id, name, discovered, next_visit) VALUES (?, ?, ?, ?)").params(id, name, discovered, discovered).run().affectedRows() > 0;
+    public class Origins {
+        public Origin find(long originId) {
+            return query.select("SELECT " + originFields + " FROM origin WHERE id = ?")
+                    .params(originId).firstResult(originMapper).orElse(null);
+        }
+
+        public Origin next() {
+            return query.select("SELECT " + originFields + " FROM origin " +
+                    "WHERE (crawl_policy IS NULL OR crawl_policy = 'CONTINUOUS') AND next_visit IS NOT NULL " +
+                    "ORDER BY next_visit ASC LIMIT 1")
+                    .firstResult(originMapper).orElse(null);
+        }
+
+        public boolean tryInsert(long id, String name, Instant discovered) {
+            return query.update("INSERT IGNORE INTO origin (id, name, discovered, next_visit) VALUES (?, ?, ?, ?)").params(id, name, discovered, discovered).run().affectedRows() > 0;
+        }
+
+        public void updateVisit(long originId, Instant lastVisit, Instant nextVisit) {
+            check(query.update("UPDATE origin SET next_visit = ?, last_visit = ? WHERE id = ?").params(nextVisit, lastVisit, originId).run());
+        }
+
+        public void updateRobots(long originId, Short crawlDelay, byte[] robotsTxt) {
+            check(query.update("UPDATE origin SET robots_crawl_delay = ?, robots_txt = ? WHERE id = ?")
+                    .params(crawlDelay, robotsTxt, originId).run());
+        }
     }
 
-    public void tryInsertLocation(Url url, Location.Type type, long via, Instant discovered, int priority) {
-        System.out.println("Insert " + url);
-        query.update("INSERT IGNORE INTO location (id, origin_id, via, type, url, discovered, next_visit, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                .params(url.id(), url.originId(), via, type, url.toString(), discovered, discovered, priority).run();
+    public class Locations {
+        private final String fields = "url, type, etag, last_modified, via, etag_response_id, etag_date";
+        private final Mapper<Location> mapper = rs -> new Location(new Url(rs.getString("url")),
+                Location.Type.valueOf(rs.getString("type")),
+                rs.getString("etag"),
+                getInstant(rs, "last_modified"),
+                getLongOrNull(rs, "via"),
+                rs.getObject("etag_response_id", UUID.class),
+                getInstant(rs, "etag_date"));
+
+        public Location find(long locationId) {
+            return query.select("SELECT " + fields + " FROM location WHERE id = ? LIMIT 1")
+                    .params(locationId)
+                    .firstResult(mapper)
+                    .orElse(null);
+        }
+
+        public void tryInsert(Url url, Location.Type type, long via, Instant discovered, int priority) {
+            query.update("INSERT IGNORE INTO location (id, origin_id, via, type, url, discovered, next_visit, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                    .params(url.id(), url.originId(), via, type, url.toString(), discovered, discovered, priority).run();
+        }
+
+        public Location next(long originId) {
+            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 1")
+                    .params(Instant.now(), originId)
+                    .firstResult(mapper)
+                    .orElse(null);
+        }
+
+        public void updateSitemapData(long locationId, Sitemap.ChangeFreq changeFreq, Float priority, String lastmod) {
+            check(query.update("UPDATE location SET sitemap_changefreq = ?, sitemap_priority = ?, sitemap_lastmod = ? WHERE id = ?")
+                    .params(changeFreq, priority, lastmod, locationId).run());
+        }
+
+        public void updateVisitData(long id, Instant lastVisit, Instant nextVisit) {
+            check(query.update("UPDATE location SET next_visit = ?, last_visit = ? WHERE id = ?").params(nextVisit, lastVisit, id).run());
+        }
+
+        public void updateEtagData(long id, String etag, Instant lastModified, UUID etagResponseId, Instant etagDate) {
+            check(query.update("UPDATE location SET etag = ?, last_modified = ?, etag_response_id = ?, etag_date = ? WHERE id = ?").params(etag, lastModified, etagResponseId, etagDate, id).run());
+        }
     }
 
-    public void updateLocationSitemapData(long locationId, Sitemap.ChangeFreq changeFreq, Float priority, String lastmod) {
-        check(query.update("UPDATE location SET sitemap_changefreq = ?, sitemap_priority = ?, sitemap_lastmod = ? WHERE id = ?")
-                .params(changeFreq, priority, lastmod, locationId).run());
+    public class Visits {
+        public Map<String, Object> find(UUID id) {
+            return query.select("SELECT * FROM visit WHERE id = ?").params(id).singleResult(Mappers.map());
+        }
+
+        public List<Map<String, Object>> findByLocationId(long locationId) {
+            return query.select("SELECT * FROM visit WHERE location_id = ? ORDER BY date DESC LIMIT 100")
+                    .params(locationId)
+                    .listResult(Mappers.map());
+        }
+
+        public void insert(UUID id, String method, long locationId, Instant date, int status, Long contentLength, String contentType) {
+            query.update("INSERT INTO visit (id, method, location_id, date, status, content_length, content_type) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                    .params(id, method, locationId, date, status, contentLength, contentType).run();
+        }
     }
 
-    public Location selectNextLocation(long originId) {
-        return query.select("SELECT " + locationFields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 1")
-                .params(Instant.now(), originId)
-                .firstResult(locationMapper)
-                .orElse(null);
+    public class Records {
+        public UUID lastResponseId(String method, long locationId) {
+            return query.select("SELECT r.id FROM record r " +
+                    "LEFT JOIN visit v ON v.id = r.visit_ID " +
+                    "WHERE v.method = ? AND v.location_id = ? AND r.type = 'response' " +
+                    "ORDER BY v.date DESC LIMIT 1")
+                    .params(method, locationId)
+                    .firstResult(rs -> (UUID)rs.getObject("id"))
+                    .orElse(null);
+        }
+
+        public void insert(UUID id, UUID visitId, String type, UUID warcId, long position, long length, byte[] payloadDigest) {
+            query.update("INSERT INTO record (id, visit_id, type, warc_id, position, length, payload_digest) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                    .params(id, visitId, type, warcId, position, length, payloadDigest).run();
+        }
+
+        public RecordLocation locate(UUID recordId) {
+            return query.select("SELECT warc.path, record.position FROM record " +
+                    "LEFT JOIN warc ON warc.id = record.warc_id " +
+                    "WHERE record.id = ?").params(recordId).singleResult(RecordLocation::new);
+        }
+
+        public Optional<IdDate> findResponseByPayloadDigest(long locationId, byte[] payloadDigest) {
+            return query.select("SELECT * FROM record r " +
+                    "LEFT JOIN visit v ON v.id = r.visit_id " +
+                    "WHERE location_id = ? AND type = 'response' AND payload_digest = ? ORDER BY date DESC LIMIT 1")
+                    .params(locationId, payloadDigest).firstResult(IdDate::new);
+        }
+
+        public List<Map<String, Object>> findByVisitId(UUID visitId) {
+            return query.select("SELECT * FROM record WHERE visit_id = ?").params(visitId).listResult(Mappers.map());
+        }
     }
 
-    public Location selectLocationById(long locationId) {
-        return query.select("SELECT " + locationFields + " FROM location WHERE id = ? LIMIT 1")
-                .params(locationId)
-                .firstResult(locationMapper)
-                .orElse(null);
-    }
+    public class Sessions {
+        public Optional<Webapp.Session> find(String sessionId) {
+            return query.select("SELECT id, username, role, oidc_state, expiry FROM session WHERE id = ?").params(sessionId)
+                    .firstResult((ResultSet rs) -> new Webapp.Session(
+                            rs.getString("id"),
+                            rs.getString("username"),
+                            rs.getString("role"),
+                            rs.getString("oidc_state"),
+                            getInstant(rs, "expiry")));
+        }
 
-    public UUID selectLastResponseRecordId(String method, long locationId) {
-        return query.select("SELECT r.id FROM record r " +
-                "LEFT JOIN visit v ON v.id = r.visit_ID " +
-                "WHERE v.method = ? AND v.location_id = ? AND r.type = 'response' " +
-                "ORDER BY v.date DESC LIMIT 1")
-                .params(method, locationId)
-                .firstResult(rs -> (UUID)rs.getObject("id"))
-                .orElse(null);
-    }
+        public void insert(String id, String oidcState, Instant expiry) {
+            query.update("INSERT INTO session (id, oidc_state, expiry) VALUES (?, ?, ?)")
+                    .params(id, oidcState, expiry).run();
+        }
 
-    public void updateLocationVisit(long id, Instant lastVisit, Instant nextVisit) {
-        check(query.update("UPDATE location SET next_visit = ?, last_visit = ? WHERE id = ?").params(nextVisit, lastVisit, id).run());
-    }
+        public void update(String sessionId, String username, String role) {
+            check(query.update("UPDATE session SET username = ?, role = ? WHERE id = ?").params(username, role, sessionId).run());
+        }
 
-    public void updateLocationEtag(long id, String etag, Instant lastModified, UUID etagResponseId, Instant etagDate) {
-        check(query.update("UPDATE location SET etag = ?, last_modified = ?, etag_response_id = ? WHERE id = ?").params(etag, lastModified, etagResponseId, id).run());
-    }
-
-
-    public void updateOriginVisit(long originId, Instant lastVisit, Instant nextVisit) {
-        check(query.update("UPDATE origin SET next_visit = ?, last_visit = ? WHERE id = ?").params(nextVisit, lastVisit, originId).run());
+        public void expire() {
+            query.update("DELETE FROM session WHERE expiry < ?").params(Instant.now()).run();
+        }
     }
 
     private void check(UpdateResult result) {
         if (result.affectedRows() == 0) {
             throw new IllegalArgumentException("update failed");
         }
-    }
-
-    public void updateOriginRobots(long originId, Short crawlDelay, byte[] robotsTxt) {
-        check(query.update("UPDATE origin SET robots_crawl_delay = ?, robots_txt = ? WHERE id = ?")
-                .params(crawlDelay, robotsTxt, originId).run());
-    }
-
-    public Origin selectNextOrigin() {
-        return query.select("SELECT " + originFields + " FROM origin " +
-                "WHERE (crawl_policy IS NULL OR crawl_policy = 'CONTINUOUS') AND next_visit IS NOT NULL " +
-                "ORDER BY next_visit ASC LIMIT 1")
-                .firstResult(originMapper).orElse(null);
-    }
-
-    public Origin selectOriginById(long originId) {
-        return query.select("SELECT " + originFields + " FROM origin WHERE id = ?")
-                .params(originId).firstResult(originMapper).orElse(null);
     }
 
     public static Long getLongOrNull(ResultSet rs, String field) throws SQLException {
@@ -153,28 +224,12 @@ public class Database implements AutoCloseable {
         return value == null ? null : value.toInstant();
     }
 
-    public void insertVisit(UUID id, String method, long locationId, Instant date, int status, Long contentLength, String contentType) {
-        query.update("INSERT INTO visit (id, method, location_id, date, status, content_length, content_type) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                .params(id, method, locationId, date, status, contentLength, contentType).run();
-    }
-
     public void tryInsertLink(long src, long dst) {
         query.update("INSERT IGNORE INTO link (src, dst) VALUES (?, ?)").params(src, dst).run();
     }
 
     public void insertWarc(UUID id, String path, Instant created) {
         query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(id, path, created).run();
-    }
-
-    public void insertRecord(UUID id, UUID visitId, String type, UUID warcId, long position, long length, byte[] payloadDigest) {
-        query.update("INSERT INTO record (id, visit_id, type, warc_id, position, length, payload_digest) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                .params(id, visitId, type, warcId, position, length, payloadDigest).run();
-    }
-
-    public RecordLocation locateRecord(UUID recordId) {
-        return query.select("SELECT warc.path, record.position FROM record " +
-                "LEFT JOIN warc ON warc.id = record.warc_id " +
-                "WHERE record.id = ?").params(recordId).singleResult(RecordLocation::new);
     }
 
     public List<Map<String, Object>> paginateCrawlLog(Instant after, boolean pagesOnly, int limit) {
@@ -187,51 +242,6 @@ public class Database implements AutoCloseable {
                 .params(after, limit)
                 .listResult(Mappers.map());
     }
-
-    public List<Map<String, Object>>  visitsForLocation(long locationId) {
-        return query.select("SELECT * FROM visit WHERE location_id = ? ORDER BY date DESC LIMIT 100")
-                .params(locationId)
-                .listResult(Mappers.map());
-    }
-
-    public Optional<IdDate> findResponseWithPayloadDigest(long locationId, byte[] payloadDigest) {
-        return query.select("SELECT * FROM record r " +
-                "LEFT JOIN visit v ON v.id = r.visit_id " +
-                "WHERE location_id = ? AND type = 'response' AND payload_digest = ? ORDER BY date DESC LIMIT 1")
-                .params(locationId, payloadDigest).firstResult(IdDate::new);
-    }
-
-    public Map<String, Object> selectVisitById(UUID id) {
-        return query.select("SELECT * FROM visit WHERE id = ?").params(id).singleResult(Mappers.map());
-    }
-
-    public List<Map<String, Object>> selectRecordsByVisitId(UUID visitId) {
-        return query.select("SELECT * FROM record WHERE visit_id = ?").params(visitId).listResult(Mappers.map());
-    }
-
-    public Optional<Webapp.Session> selectSessionById(String sessionId) {
-        return query.select("SELECT id, username, role, oidc_state, expiry FROM session WHERE id = ?").params(sessionId)
-                .firstResult((ResultSet rs) -> new Webapp.Session(
-                        rs.getString("id"),
-                        rs.getString("username"),
-                        rs.getString("role"),
-                        rs.getString("oidc_state"),
-                        getInstant(rs, "expiry")));
-    }
-
-    public void insertSession(String id, String oidcState, Instant expiry) {
-        query.update("INSERT INTO session (id, oidc_state, expiry) VALUES (?, ?, ?)")
-                .params(id, oidcState, expiry).run();
-    }
-
-    public void updateSessionUsername(String sessionId, String username, String role) {
-        check(query.update("UPDATE session SET username = ?, role = ? WHERE id = ?").params(username, role, sessionId).run());
-    }
-
-    public void expireSesssions() {
-        query.update("DELETE FROM session WHERE expiry < ?").params(Instant.now()).run();
-    }
-
 
     static class IdDate {
         final UUID id;

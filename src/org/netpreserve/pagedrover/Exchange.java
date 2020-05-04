@@ -67,7 +67,7 @@ public class Exchange implements Closeable {
         Path tempFile = Files.createTempFile("pagedrover", ".tmp");
         bufferFile = FileChannel.open(tempFile, READ, WRITE, DELETE_ON_CLOSE, TRUNCATE_EXISTING);
         url = location.url();
-        this.via = location.via == null ? null : crawl.db.selectLocationById(location.via);
+        this.via = location.via == null ? null : crawl.db.locations.find(location.via);
         crawl.exchanges.add(this);
     }
 
@@ -171,14 +171,14 @@ public class Exchange implements Closeable {
                     if (!request.method().equals("GET")) {
                         throw new IOException("TODO: " + request.method() + " subrequests");
                     }
-                    UUID lastVisitResponseId = crawl.db.selectLastResponseRecordId(request.method(), url.id());
+                    UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), url.id());
                     if (lastVisitResponseId == null) {
                         enqueue(url, TRANSCLUSION, 40);
-                        Origin origin = crawl.db.selectOriginById(url.originId());
+                        Origin origin = crawl.db.origins.find(url.originId());
                         if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
                             throw new IOException("Forbidden by crawl policy");
                         }
-                        Location location = crawl.db.selectLocationById(url.id());
+                        Location location = crawl.db.locations.find(url.id());
                         try (Exchange subexchange = new Exchange(crawl, origin, location, request.method(), request.headers())) {
                             subexchange.run();
                             if (subexchange.revisitOf != null) {
@@ -216,39 +216,39 @@ public class Exchange implements Closeable {
         for (String sitemapUrl : rules.getSitemaps()) {
             enqueue(location.url().resolve(sitemapUrl), Location.Type.SITEMAP, 2);
         }
-        crawl.db.updateOriginRobots(location.url().originId(), crawlDelay, content);
+        crawl.db.origins.updateRobots(location.url().originId(), crawlDelay, content);
     }
 
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
             Url url = location.url().resolve(entry.loc);
             enqueue(url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
-            crawl.db.updateLocationSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
+            crawl.db.locations.updateSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
     }
 
     private void enqueue(Url targetUrl, Location.Type type, int priority) {
-        if (crawl.db.tryInsertOrigin(targetUrl.originId(), targetUrl.origin(), date)) {
+        if (crawl.db.origins.tryInsert(targetUrl.originId(), targetUrl.origin(), date)) {
 
         }
-        crawl.db.tryInsertLocation(targetUrl, type, location.url().id(), date, priority);
+        crawl.db.locations.tryInsert(targetUrl, type, location.url().id(), date, priority);
         crawl.db.tryInsertLink(location.url().id(), targetUrl.id());
     }
 
     private void finish() {
         String contentType = httpResponse == null ? null : httpResponse.contentType().base().toString();
         Long contentLength = httpResponse == null ? null : httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
-        crawl.db.updateOriginVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
+        crawl.db.origins.updateVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
 
         if (Status.isSuccess(fetchStatus)) {
             String etag = httpResponse.headers().first("ETag").orElse(null);
             Instant lastModified = httpResponse.headers().first("Last-Modified")
                     .map(s -> RFC_1123_DATE_TIME.parse(s, Instant::from)).orElse(null);
-            crawl.db.updateLocationEtag(location.url().id(), etag, lastModified, responseId, date);
+            crawl.db.locations.updateEtagData(location.url().id(), etag, lastModified, responseId, date);
         }
 
-        crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)));
-        crawl.db.insertVisit(id, httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType);
+        crawl.db.locations.updateVisitData(location.url().id(), date, date.plus(Duration.ofDays(1)));
+        crawl.db.visits.insert(id, httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType);
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
                 location.url(), location.type(), via != null ? via.url() : "-", contentType != null ? contentType : "-");
         System.out.flush();

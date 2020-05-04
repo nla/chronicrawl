@@ -34,10 +34,10 @@ public class Crawl implements Closeable {
     public void addSeed(String url) {
         Url crawlUrl = new Url(url);
         Instant now = Instant.now();
-        if (db.tryInsertOrigin(crawlUrl.originId(), crawlUrl.origin(), now)) {
-            db.tryInsertLocation(crawlUrl.resolve("/robots.txt"), Location.Type.ROBOTS, crawlUrl.id(), now, 1);
+        if (db.origins.tryInsert(crawlUrl.originId(), crawlUrl.origin(), now)) {
+            db.locations.tryInsert(crawlUrl.resolve("/robots.txt"), Location.Type.ROBOTS, crawlUrl.id(), now, 1);
         }
-        db.tryInsertLocation(crawlUrl, Location.Type.PAGE, 0, now, 10);
+        db.locations.tryInsert(crawlUrl, Location.Type.PAGE, 0, now, 10);
     }
 
     @Override
@@ -66,7 +66,7 @@ public class Crawl implements Closeable {
             }
             return;
         }
-        Origin origin = db.selectNextOrigin();
+        Origin origin = db.origins.next();
         if (origin == null) {
             try {
                 Thread.sleep(1000);
@@ -84,9 +84,9 @@ public class Crawl implements Closeable {
                 return;
             }
         }
-        Location location = db.selectNextLocation(origin.id);
+        Location location = db.locations.next(origin.id);
         if (location == null) {
-            db.updateOriginVisit(origin.id, Instant.now(), null);
+            db.origins.updateVisit(origin.id, Instant.now(), null);
             return;
         }
         try (Exchange exchange = new Exchange(this, origin, location, "GET", Collections.emptyMap())) {

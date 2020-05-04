@@ -1,5 +1,6 @@
 package org.netpreserve.pagedrover;
 
+import com.github.f4b6a3.uuid.UuidCreator;
 import crawlercommons.robots.SimpleRobotRules;
 import crawlercommons.robots.SimpleRobotRulesParser;
 import org.netpreserve.jwarc.*;
@@ -38,10 +39,11 @@ public class Exchange implements Closeable {
             "ugprade-insecure-requests", "accept-encoding"
     );
 
+    final UUID id = UuidCreator.getTimeOrdered();
     final Crawl crawl;
-    private final Origin origin;
+    final Origin origin;
     final Location location;
-    private final Location via;
+    final Location via;
     final FileChannel bufferFile;
     final Instant date = Instant.now();
     final Url url;
@@ -72,8 +74,8 @@ public class Exchange implements Closeable {
     public void run() throws IOException {
         if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url().toString())) {
             fetch();
-            crawl.storage.save(this);
             finish();
+            crawl.storage.save(this);
         } else {
             fetchStatus = Status.ROBOTS_DISALLOWED;
         }
@@ -246,7 +248,7 @@ public class Exchange implements Closeable {
         }
 
         crawl.db.updateLocationVisit(location.url().id(), date, date.plus(Duration.ofDays(1)));
-        crawl.db.insertVisit(httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType, responseId);
+        crawl.db.insertVisit(id, httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType);
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
                 location.url(), location.type(), via != null ? via.url() : "-", contentType != null ? contentType : "-");
         System.out.flush();

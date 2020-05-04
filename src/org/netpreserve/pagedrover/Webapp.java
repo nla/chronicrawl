@@ -1,30 +1,31 @@
 package org.netpreserve.pagedrover;
 
+import com.grack.nanojson.JsonArray;
+import com.grack.nanojson.JsonObject;
+import com.grack.nanojson.JsonParser;
+import com.grack.nanojson.JsonParserException;
 import com.mitchellbosecke.pebble.PebbleEngine;
 import com.mitchellbosecke.pebble.template.PebbleTemplate;
 import fi.iki.elonen.NanoHTTPD;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.StringWriter;
-import java.io.UncheckedIOException;
-import java.net.SocketException;
+import java.io.*;
+import java.net.*;
+import java.security.SecureRandom;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.logging.Logger;
 
 import static fi.iki.elonen.NanoHTTPD.Response.Status.*;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class Webapp extends NanoHTTPD implements Closeable {
-    private static PebbleEngine pebble = new PebbleEngine.Builder()
+    private static final PebbleEngine pebble = new PebbleEngine.Builder()
             .strictVariables(true)
             .build();
-
+    private static final SecureRandom random = new SecureRandom();
     private final Crawl crawl;
-
 
     static {
         // suppress annoying Broken pipe exception logging
@@ -32,37 +33,76 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 || !r.getThrown().getMessage().contains("Broken pipe"));
     }
 
+    private JsonObject oidcConfig;
+
     public Webapp(Crawl crawl, int port) throws IOException {
         super(port);
         this.crawl = crawl;
         start();
     }
 
+    public synchronized JsonObject oidcConfig() {
+        if (oidcConfig == null) {
+            String url = crawl.config.oidcUrl.replaceFirst("/+$", "") + "/.well-known/openid-configuration";
+            try {
+                this.oidcConfig = JsonParser.object().from(new URL(url));
+            } catch (JsonParserException | MalformedURLException e) {
+                throw new RuntimeException("Error fetching " + url, e);
+            }
+        }
+        return oidcConfig;
+    }
+
     @Override
-    public Response serve(IHTTPSession session) {
+    public Response serve(IHTTPSession request) {
         try {
-            session.parseBody(null);
-            return new RequestContext(session).serve();
-        } catch (IOException e) {
-            return newFixedLengthResponse(INTERNAL_ERROR, "text/plain", e.getMessage());
+            request.parseBody(null);
+            return new RequestContext(request).serve();
         } catch (BadRequest e) {
             return newFixedLengthResponse(BAD_REQUEST, "text/plain", e.getMessage());
         } catch (NotFound e) {
             return newFixedLengthResponse(NOT_FOUND, "text/plain", "404 Not found");
         } catch (ResponseException e) {
             return newFixedLengthResponse(e.getStatus(), NanoHTTPD.MIME_PLAINTEXT, e.getMessage());
+        } catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            return newFixedLengthResponse(INTERNAL_ERROR, "text/plain", e.getMessage() + "\n\n" + sw.toString());
+        }
+    }
+
+    static class Session {
+        final String id;
+        final String username;
+        final String role;
+        final String oidcState;
+        final Instant expiry;
+
+        Session(String id, String username, String role, String oidcState, Instant expiry) {
+            this.id = id;
+            this.username = username;
+            this.role = role;
+            this.oidcState = oidcState;
+            this.expiry = expiry;
         }
     }
 
     private class RequestContext {
-        final IHTTPSession session;
+        final IHTTPSession request;
+        private Session session;
 
-        private RequestContext(IHTTPSession session) {
-            this.session = session;
+        private RequestContext(IHTTPSession request) {
+            this.request = request;
         }
 
-        private Response serve() {
-            switch (session.getMethod().name() + " " + session.getUri()) {
+        private Response serve() throws Exception {
+            Response authResponse = authenticate();
+            if (authResponse != null) return authResponse;
+            if (!session.role.equals("admin")) {
+                return newFixedLengthResponse(FORBIDDEN, "text/plain", "Access denied. Missing role 'admin'.");
+            }
+
+            switch (request.getMethod().name() + " " + request.getUri()) {
                 case "GET /":
                     return View.home.render();
                 case "GET /location":
@@ -74,7 +114,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     crawl.addSeed(url);
                     return seeOther("/");
                 case "GET /log":
-                    boolean subresources = session.getParameters().containsKey("subresources");
+                    boolean subresources = request.getParameters().containsKey("subresources");
                     Timestamp after = Optional.ofNullable(param("after", null))
                             .map(Timestamp::valueOf).orElse(Timestamp.from(Instant.now()));
                     return View.log.render("log", crawl.db.paginateCrawlLog(after.toInstant(), !subresources,100),
@@ -86,9 +126,80 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     }
                     Origin origin = found(crawl.db.selectOriginById(id));
                     return View.origin.render("origin", origin);
+                case "GET /visit":
+                    UUID visitId = UUID.fromString(param("id"));
+                    return View.visit.render("visit", crawl.db.selectVisitById(visitId),
+                            "records", crawl.db.selectRecordsByVisitId(visitId));
                 default:
                     throw new NotFound();
             }
+        }
+
+        private Response authenticate() throws IOException, JsonParserException, SQLException {
+            if (crawl.config.oidcUrl == null) {
+                session = new Session(null, "anonymous", "admin", null, Instant.MAX);
+            }
+            crawl.db.expireSesssions();
+            String sessionId = request.getCookies().read(crawl.config.uiSessionCookie);
+            this.session = sessionId == null ? null : crawl.db.selectSessionById(sessionId).orElse(null);
+            if (session != null && request.getUri().equals("/authcb") && param("state").equals(session.oidcState)) {
+                // exchange code for access token
+                var conn = (HttpURLConnection) new URL(oidcConfig().getString("token_endpoint")).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setDoOutput(true);
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                conn.setRequestProperty("Authorization", "Basic " + Base64.getEncoder().encodeToString(
+                        (crawl.config.oidcClientId + ":" + crawl.config.oidcClientSecret).getBytes(UTF_8)));
+                try (var out = conn.getOutputStream()) {
+                    out.write(("grant_type=authorization_code&code=" + URLEncoder.encode(param("code"), UTF_8) +
+                            "&redirect_uri=" + URLEncoder.encode(contextUrl() + "/authcb", UTF_8)).getBytes(UTF_8));
+                }
+                String accessToken;
+                try (var stream = conn.getInputStream()) {
+                    accessToken = JsonParser.object().from(stream).getString("access_token");
+                }
+
+                // introspect token
+                conn = (HttpURLConnection) new URL(oidcConfig().getString("introspection_endpoint")).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setDoOutput(true);
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                conn.setRequestProperty("Authorization", "Basic " + Base64.getEncoder().encodeToString((crawl.config.oidcClientId + ":" + crawl.config.oidcClientSecret).getBytes(UTF_8)));
+                try (var out = conn.getOutputStream()) {
+                    out.write(("token=" + accessToken).getBytes(UTF_8));
+                }
+                try (var stream = conn.getInputStream()) {
+                    var info = JsonParser.object().from(stream);
+                    JsonObject ra = info.getObject("resource_access");
+                    JsonObject cli = ra == null ? null : ra.getObject(crawl.config.oidcClientId);
+                    JsonArray roles = cli == null ? null : cli.getArray("roles");
+                    String role = roles != null && roles.contains("admin") ? "admin" : "anonymous";
+                    crawl.db.updateSessionUsername(sessionId, info.getString("preferred_username"), role);
+                }
+                return seeOther("/");
+            } else if (session == null || session.username == null) {
+                // create new session and redirect to auth server
+                String id = newSessionId();
+                String oidcState = newSessionId();
+                crawl.db.insertSession(id, oidcState, Instant.now().plusSeconds(crawl.config.uiSessionExpirySecs));
+                String endpoint = oidcConfig().getString("authorization_endpoint");
+                String redirectUri = contextUrl() + "/authcb";
+                Response response = seeOther(endpoint + "?response_type=code&client_id=" + URLEncoder.encode(crawl.config.oidcClientId, UTF_8) +
+                        "&redirect_uri=" + URLEncoder.encode(redirectUri, UTF_8) + "&scope=openid&state=" + URLEncoder.encode(oidcState, UTF_8));
+                response.addHeader("Set-Cookie", crawl.config.uiSessionCookie + "=" + id + "; Max-Age=" + crawl.config.uiSessionExpirySecs + "; HttpOnly");
+                return response;
+            }
+            return null;
+        }
+
+        private String contextUrl() {
+            return request.getHeaders().getOrDefault("X-Forwarded-Proto", "http") + "://" + request.getHeaders().get("host");
+        }
+
+        private String newSessionId() {
+            byte[] bytes = new byte[20];
+            random.nextBytes(bytes);
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         }
 
         private Response seeOther(String location) {
@@ -120,7 +231,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         }
 
         private String param(String name, String defaultValue) {
-            var values = session.getParameters().get(name);
+            var values = request.getParameters().get(name);
             if (values == null || values.isEmpty() || values.get(0).isEmpty()) return defaultValue;
             return values.get(0);
         }
@@ -136,7 +247,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin;
+        home, location, log, origin, visit;
 
         private final PebbleTemplate template;
 

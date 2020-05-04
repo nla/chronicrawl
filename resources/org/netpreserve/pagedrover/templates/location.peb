@@ -13,7 +13,7 @@
 <table>
     {% for visit in visits %}
         <tr>
-            <td>{{ visit.date }}</td>
+            <td><a href="visit?id={{ visit.id }}">{{ visit.date }}</a> </td>
             <td>{{ visit.method }}</td>
             <td>{{ visit.status }}</td>
             <td>{{ visit.content_type }}</td>

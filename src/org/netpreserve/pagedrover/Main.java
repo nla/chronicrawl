@@ -40,6 +40,8 @@ public class Main {
                     seeds.add(args[i]);
             }
         }
+        config.load(System.getenv());
+        config.load(System.getProperties());
         Database db = new Database();
         if (initDb) db.init();
         try (Crawl crawl = new Crawl(config, db);

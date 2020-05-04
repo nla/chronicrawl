@@ -1,8 +1,17 @@
 <!doctype html>
 <meta charset=utf-8>
+<base href="/">
 <style>
     a { text-decoration: none; }
     a:hover { text-decoration: underline; }
+    nav.top-bar ul { list-style-type: none; margin: 0; padding: 0; }
+    nav.top-bar ul li { display: inline-block; padding: 8px; }
 </style>
-<title>{% block title %}Home{% endblock %} - PageDrover</title>
+<title>{% block title %}Home{% endblock %} - Crawler</title>
+<nav class="top-bar">
+    <ul>
+        <li><a href="./">Home</a>
+        <li><a href="log">Crawl Log</a>
+    </ul>
+</nav>
 {% block content %}Missing content block!{% endblock %}

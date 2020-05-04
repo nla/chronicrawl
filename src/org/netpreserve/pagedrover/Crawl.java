@@ -18,6 +18,7 @@ public class Crawl implements Closeable {
     final Browser browser;
     final Storage storage;
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
+    boolean paused = true;
 
     public Crawl() throws IOException {
         this(new Config(), new Database());
@@ -57,6 +58,14 @@ public class Crawl implements Closeable {
     }
 
     public void step() throws IOException {
+        if (paused) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            return;
+        }
         Origin origin = db.selectNextOrigin();
         if (origin == null) {
             try {

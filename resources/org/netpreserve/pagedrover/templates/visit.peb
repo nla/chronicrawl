@@ -1,0 +1,18 @@
+{% extends "./layout.peb" %}
+
+{% block content %}
+<h1>Visit</h1>
+
+{% for entry in visit.entrySet() %}
+   {{ entry.key }}: {{ entry.value }}<br>
+{% endfor %}
+
+
+{% for record in records %}
+   <h3>{{ record.type }}</h3>
+   {% for entry in record.entrySet() %}
+      {{ entry.key }}: {{ entry.value }}<br>
+   {% endfor %}
+{% endfor %}
+
+{% endblock %}

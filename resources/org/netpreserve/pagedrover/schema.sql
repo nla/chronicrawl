@@ -1,10 +1,11 @@
 DROP TABLE IF EXISTS link;
+DROP TABLE IF EXISTS record;
 DROP TABLE IF EXISTS visit;
 DROP TABLE IF EXISTS snapshot;
 DROP TABLE IF EXISTS location;
 DROP TABLE IF EXISTS origin;
-DROP TABLE IF EXISTS record;
 DROP TABLE IF EXISTS warc;
+DROP TABLE IF EXISTS session;
 
 CREATE TABLE origin
 (
@@ -46,29 +47,29 @@ CREATE TABLE warc
     created TIMESTAMP NOT NULL
 );
 
-CREATE TABLE record
-(
-    id             UUID                                                                          NOT NULL PRIMARY KEY,
-    location_id    BIGINT                                                                        NOT NULL,
-    date           TIMESTAMP                                                                     NOT NULL,
-    type           ENUM ('warcinfo', 'request', 'response', 'revisit', 'metadata', 'conversion') NOT NULL,
-    warc_id        UUID                                                                          NOT NULL,
-    position       BIGINT                                                                        NOT NULL,
-    payload_digest VARBINARY(128)                                                                NULL,
-    FOREIGN KEY (warc_id) REFERENCES warc (id) ON DELETE CASCADE
-);
-
 CREATE TABLE visit
 (
+    id             UUID         NOT NULL PRIMARY KEY,
     method         VARCHAR(16)  NOT NULL,
     location_id    BIGINT       NOT NULL,
     date           TIMESTAMP    NOT NULL,
     status         SMALLINT     NOT NULL,
     content_type   VARCHAR(128) NULL,
     content_length BIGINT       NULL,
-    response_id    UUID         NULL,
-    PRIMARY KEY (location_id, date),
     FOREIGN KEY (location_id) REFERENCES location (id) ON DELETE CASCADE
+);
+
+CREATE TABLE record
+(
+    id             UUID                                                              NOT NULL PRIMARY KEY,
+    visit_id       UUID                                                              NOT NULL,
+    type           ENUM ('request', 'response', 'revisit', 'metadata', 'conversion') NOT NULL,
+    warc_id        UUID                                                              NOT NULL,
+    position       BIGINT                                                            NOT NULL,
+    length         BIGINT                                                            NOT NULL,
+    payload_digest VARBINARY(128)                                                    NULL,
+    FOREIGN KEY (visit_id) REFERENCES visit (id) ON DELETE CASCADE,
+    FOREIGN KEY (warc_id) REFERENCES warc (id) ON DELETE CASCADE
 );
 
 CREATE TABLE link
@@ -78,4 +79,12 @@ CREATE TABLE link
     FOREIGN KEY (src) REFERENCES location ON DELETE CASCADE,
     FOREIGN KEY (dst) REFERENCES location ON DELETE CASCADE,
     PRIMARY KEY (src, dst)
+);
+
+CREATE TABLE session (
+    id VARCHAR(30) NOT NULL,
+    username VARCHAR(128) NULL,
+    role ENUM('anonymous', 'admin') NOT NULL DEFAULT 'anonymous',
+    oidc_state VARCHAR(30) NOT NULL,
+    expiry TIMESTAMP NOT NULL
 );

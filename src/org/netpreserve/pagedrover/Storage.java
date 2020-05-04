@@ -64,7 +64,7 @@ public class Storage implements Closeable {
 
     synchronized void save(Exchange exchange) throws IOException {
         if (exchange.fetchStatus > 0 && exchange.httpRequest != null) {
-            UUID requestId = UuidCreator.getTimeOrdered();
+            UUID requestId = exchange.id;
             WarcRequest request = new WarcRequest.Builder(exchange.url.toURI())
                     .version(MessageVersion.WARC_1_1)
                     .recordId(requestId)
@@ -75,20 +75,23 @@ public class Storage implements Closeable {
             if (config.warcMaxLengthBytes > 0 && warcWriter.position() > config.warcMaxLengthBytes) {
                 openNextFile();
             }
-            long requestOffset = warcWriter.position();
-            warcWriter.write(request);
-            db.insertRecord(requestId, exchange.url.id(), exchange.date, request.type(), warcId, requestOffset, null);
+            writeRecord(exchange, requestId, request, null);
 
             if (exchange.httpResponse != null) {
                 exchange.bufferFile.position(0);
                 UUID responseId = UuidCreator.getTimeOrdered();
                 WarcCaptureRecord response = buildResponse(responseId, exchange, request);
-                long responseOffset = warcWriter.position();
-                warcWriter.write(response);
-                db.insertRecord(responseId, exchange.url.id(), exchange.date, response.type(), warcId, responseOffset, exchange.digest);
+                writeRecord(exchange, responseId, response, exchange.digest);
                 exchange.responseId = responseId;
             }
         }
+    }
+
+    private void writeRecord(Exchange exchange, UUID recordId, WarcRecord record, byte[] payloadDigest) throws IOException {
+        long offset = warcWriter.position();
+        warcWriter.write(record);
+        long length = warcWriter.position() - offset;
+        db.insertRecord(recordId, exchange.id, record.type(), warcId, offset, length, payloadDigest);
     }
 
     private WarcCaptureRecord buildResponse(UUID responseId, Exchange exchange, WarcRequest request) throws IOException {

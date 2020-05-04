@@ -98,12 +98,12 @@ public class Database implements AutoCloseable {
     }
 
     public UUID selectLastResponseRecordId(String method, long locationId) {
-        return query.select("SELECT v.response_id FROM visit v " +
-                "LEFT JOIN record r ON r.id = v.response_id " +
+        return query.select("SELECT r.id FROM record r " +
+                "LEFT JOIN visit v ON v.id = r.visit_ID " +
                 "WHERE v.method = ? AND v.location_id = ? AND r.type = 'response' " +
                 "ORDER BY v.date DESC LIMIT 1")
                 .params(method, locationId)
-                .firstResult(rs -> (UUID)rs.getObject("response_id"))
+                .firstResult(rs -> (UUID)rs.getObject("id"))
                 .orElse(null);
     }
 
@@ -153,9 +153,9 @@ public class Database implements AutoCloseable {
         return value == null ? null : value.toInstant();
     }
 
-    public void insertVisit(String method, long locationId, Instant date, int status, Long contentLength, String contentType, UUID responseId) {
-        query.update("INSERT INTO visit (method, location_id, date, status, content_length, content_type, response_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                .params(method, locationId, date, status, contentLength, contentType, responseId).run();
+    public void insertVisit(UUID id, String method, long locationId, Instant date, int status, Long contentLength, String contentType) {
+        query.update("INSERT INTO visit (id, method, location_id, date, status, content_length, content_type) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                .params(id, method, locationId, date, status, contentLength, contentType).run();
     }
 
     public void tryInsertLink(long src, long dst) {
@@ -166,9 +166,9 @@ public class Database implements AutoCloseable {
         query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(id, path, created).run();
     }
 
-    public void insertRecord(UUID id, long locationId, Instant date, String type, UUID warcId, long position, byte[] payloadDigest) {
-        query.update("INSERT INTO record (id, location_id, date, type, warc_id, position, payload_digest) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                .params(id, locationId, date, type, warcId, position, payloadDigest).run();
+    public void insertRecord(UUID id, UUID visitId, String type, UUID warcId, long position, long length, byte[] payloadDigest) {
+        query.update("INSERT INTO record (id, visit_id, type, warc_id, position, length, payload_digest) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                .params(id, visitId, type, warcId, position, length, payloadDigest).run();
     }
 
     public RecordLocation locateRecord(UUID recordId) {
@@ -179,7 +179,7 @@ public class Database implements AutoCloseable {
 
     public List<Map<String, Object>> paginateCrawlLog(Instant after, boolean pagesOnly, int limit) {
         return query.select("SELECT v.date, v.method, l.id location_id, l.url, v.status, v.content_type, " +
-                "v.content_length, v.response_id " +
+                "v.content_length " +
                 "FROM visit v " +
                 "LEFT JOIN location l ON l.id = v.location_id " +
                 "WHERE v.date < ? " + (pagesOnly ? " AND l.type = 'PAGE' " : "") +
@@ -195,9 +195,43 @@ public class Database implements AutoCloseable {
     }
 
     public Optional<IdDate> findResponseWithPayloadDigest(long locationId, byte[] payloadDigest) {
-        return query.select("SELECT * FROM record WHERE location_id = ? AND type = 'response' AND payload_digest = ? ORDER BY date DESC LIMIT 1")
+        return query.select("SELECT * FROM record r " +
+                "LEFT JOIN visit v ON v.id = r.visit_id " +
+                "WHERE location_id = ? AND type = 'response' AND payload_digest = ? ORDER BY date DESC LIMIT 1")
                 .params(locationId, payloadDigest).firstResult(IdDate::new);
     }
+
+    public Map<String, Object> selectVisitById(UUID id) {
+        return query.select("SELECT * FROM visit WHERE id = ?").params(id).singleResult(Mappers.map());
+    }
+
+    public List<Map<String, Object>> selectRecordsByVisitId(UUID visitId) {
+        return query.select("SELECT * FROM record WHERE visit_id = ?").params(visitId).listResult(Mappers.map());
+    }
+
+    public Optional<Webapp.Session> selectSessionById(String sessionId) {
+        return query.select("SELECT id, username, role, oidc_state, expiry FROM session WHERE id = ?").params(sessionId)
+                .firstResult((ResultSet rs) -> new Webapp.Session(
+                        rs.getString("id"),
+                        rs.getString("username"),
+                        rs.getString("role"),
+                        rs.getString("oidc_state"),
+                        getInstant(rs, "expiry")));
+    }
+
+    public void insertSession(String id, String oidcState, Instant expiry) {
+        query.update("INSERT INTO session (id, oidc_state, expiry) VALUES (?, ?, ?)")
+                .params(id, oidcState, expiry).run();
+    }
+
+    public void updateSessionUsername(String sessionId, String username, String role) {
+        check(query.update("UPDATE session SET username = ?, role = ? WHERE id = ?").params(username, role, sessionId).run());
+    }
+
+    public void expireSesssions() {
+        query.update("DELETE FROM session WHERE expiry < ?").params(Instant.now()).run();
+    }
+
 
     static class IdDate {
         final UUID id;

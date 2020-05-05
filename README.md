@@ -1,4 +1,4 @@
-# Chronicrawl [<img src="https://upload.wikimedia.org/wikipedia/en/3/34/Heysen_Droving.jpg" align="right" width="300px" title="Droving into the Light, Hans Heysen">](https://en.wikipedia.org/wiki/File:Heysen_Droving.jpg)
+# Chronicrawl [<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Pocketwatch_cutaway_drawing.jpg/640px-Pocketwatch_cutaway_drawing.jpg" align="right" width="300px">](https://en.wikipedia.org/wiki/File:Pocketwatch_cutaway_drawing.jpg)
 
 Chronicrawl is an experimental continuous web crawler for web archiving.
 

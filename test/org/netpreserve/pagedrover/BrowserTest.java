@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover.browser;
+package org.netpreserve.pagedrover;
 
 import org.junit.Test;
 import org.netpreserve.pagedrover.Browser;

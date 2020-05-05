@@ -117,6 +117,11 @@ public class Config {
      */
     String oidcClientSecret;
 
+    /**
+     * Command to run pywb for optional replay.
+     */
+    String pywb;
+
     static String version() {
         InputStream stream = Config.class.getResourceAsStream("/META-INF/maven/org.netpreserve/trickler/pom.properties");
         if (stream != null) {

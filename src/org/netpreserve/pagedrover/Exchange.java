@@ -171,7 +171,7 @@ public class Exchange implements Closeable {
                     if (!request.method().equals("GET")) {
                         throw new IOException("TODO: " + request.method() + " subrequests");
                     }
-                    UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), url.id());
+                    UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), url.id(), date);
                     if (lastVisitResponseId == null) {
                         enqueue(url, TRANSCLUSION, 40);
                         Origin origin = crawl.db.origins.find(url.originId());

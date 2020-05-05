@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.InterruptedIOException;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -21,6 +22,7 @@ public class BrowserTab implements Closeable {
     private final String sessionId;
     private Consumer<BrowserRequest> requestInterceptor;
     private CompletableFuture<Double> loadFuture;
+    private CompletableFuture<Void> networkIdleFuture;
     private boolean closed;
 
     BrowserTab(Browser browser) {
@@ -29,9 +31,10 @@ public class BrowserTab implements Closeable {
         sessionId = browser.call("Target.attachToTarget", Map.of("targetId", targetId, "flatten", true)).getString("sessionId");
         browser.sessionEventHandlers.put(sessionId, this::handleEvent);
         call("Page.enable", Map.of()); // for loadEventFired
+        call("Page.setLifecycleEventsEnabled", Map.of("enabled", true)); // for networkidle
     }
 
-    JsonObject call(String method, Map<String, Object> params) {
+    public JsonObject call(String method, Map<String, Object> params) {
         synchronized (this) {
             if (closed) throw new IllegalStateException("closed");
         }
@@ -42,7 +45,7 @@ public class BrowserTab implements Closeable {
         JsonObject params = event.getObject("params");
         switch (event.getString("method")) {
             case "Fetch.requestPaused":
-                BrowserRequest request = new BrowserRequest(this, params.getString("requestId"), params.getObject("request"));
+                BrowserRequest request = new BrowserRequest(this, params.getString("requestId"), params.getObject("request"), params.getString("resourceType"));
                 if (requestInterceptor != null) {
                     try {
                         requestInterceptor.accept(request);
@@ -58,7 +61,15 @@ public class BrowserTab implements Closeable {
                 }
                 break;
             case "Page.loadEventFired":
-                loadFuture.complete(params.getDouble("timestamp"));
+                if (loadFuture != null) {
+                    loadFuture.complete(params.getDouble("timestamp"));
+                }
+                break;
+            case "Page.lifecycleEvent":
+                String eventName = params.getString("name");
+                if (networkIdleFuture != null && eventName.equals("networkIdle")) {
+                    networkIdleFuture.complete(null);
+                }
                 break;
             default:
                 log.debug("Unhandled event {}", event);
@@ -80,12 +91,17 @@ public class BrowserTab implements Closeable {
         call("Fetch.enable", Map.of());
     }
 
-    public Future<Double> navigate(String url) {
+    public CompletableFuture<Void> navigate(String url) {
         if (loadFuture != null) {
             loadFuture.completeExceptionally(new InterruptedIOException("navigated away"));
         }
         loadFuture = new CompletableFuture<>();
+        networkIdleFuture = new CompletableFuture<>();
         call("Page.navigate", Map.of("url", url));
-        return loadFuture;
+        return CompletableFuture.allOf(networkIdleFuture, loadFuture);
+    }
+
+    public String screenshot() {
+        return "data:image/jpeg;base64," + call("Page.captureScreenshot", Map.of("format", "jpeg", "quality", 50)).getString("data");
     }
 }

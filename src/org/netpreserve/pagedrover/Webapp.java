@@ -7,27 +7,35 @@ import com.grack.nanojson.JsonParserException;
 import com.mitchellbosecke.pebble.PebbleEngine;
 import com.mitchellbosecke.pebble.template.PebbleTemplate;
 import fi.iki.elonen.NanoHTTPD;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.*;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
-import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static fi.iki.elonen.NanoHTTPD.Response.Status.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class Webapp extends NanoHTTPD implements Closeable {
+    private static final Logger log = LoggerFactory.getLogger(Webapp.class);
     private static final PebbleEngine pebble = new PebbleEngine.Builder()
             .strictVariables(true)
             .build();
     private static final SecureRandom random = new SecureRandom();
 
     static { // suppress annoying Broken pipe exception logging
-        Logger.getLogger(NanoHTTPD.class.getName()).setFilter(r -> !(r.getThrown() instanceof SocketException)
+        java.util.logging.Logger.getLogger(NanoHTTPD.class.getName()).setFilter(r -> !(r.getThrown() instanceof SocketException)
                 || !r.getThrown().getMessage().contains("Broken pipe"));
     }
 
@@ -56,20 +64,24 @@ public class Webapp extends NanoHTTPD implements Closeable {
 
     @Override
     public Response serve(IHTTPSession request) {
+        Response response;
         try {
             request.parseBody(null);
-            return new RequestContext(request).serve();
+            response = new RequestContext(request).serve();
         } catch (BadRequest e) {
-            return newFixedLengthResponse(BAD_REQUEST, "text/plain", e.getMessage());
+            response = newFixedLengthResponse(BAD_REQUEST, "text/plain", e.getMessage());
         } catch (NotFound e) {
-            return newFixedLengthResponse(NOT_FOUND, "text/plain", "404 Not found");
+            response = newFixedLengthResponse(NOT_FOUND, "text/plain", "404 Not found");
         } catch (ResponseException e) {
-            return newFixedLengthResponse(e.getStatus(), NanoHTTPD.MIME_PLAINTEXT, e.getMessage());
+            response = newFixedLengthResponse(e.getStatus(), NanoHTTPD.MIME_PLAINTEXT, e.getMessage());
         } catch (Exception e) {
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
-            return newFixedLengthResponse(INTERNAL_ERROR, "text/plain", e.getMessage() + "\n\n" + sw.toString());
+            log.error(request.getUri(), e);
+            response = newFixedLengthResponse(INTERNAL_ERROR, "text/plain", e.getMessage() + "\n\n" + sw.toString());
         }
+        log.info(request.getMethod() + " " + request.getUri() + (request.getQueryParameterString() == null ? "" : "?" + request.getQueryParameterString()) + " " + response.getStatus());
+        return response;
     }
 
     static class Session {
@@ -102,35 +114,76 @@ public class Webapp extends NanoHTTPD implements Closeable {
             if (!session.role.equals("admin")) {
                 return newFixedLengthResponse(FORBIDDEN, "text/plain", "Access denied. Missing role 'admin'.");
             }
-
             switch (request.getMethod().name() + " " + request.getUri()) {
                 case "GET /":
-                    return View.home.render();
+                    return render(View.home, "paused", crawl.paused.get());
+                case "GET /cdx": {
+                    Url url = new Url(param("url"));
+                    var lines = new ArrayList<Database.CdxLine>();
+                    lines.addAll(db.records.listResponsesByLocationId(url.id()));
+                    if (url.scheme().equals("http")) {
+                        lines.addAll(db.records.listResponsesByLocationId(url.withScheme("https").id()));
+                    }
+                    StringBuilder sb = new StringBuilder();
+                    for (var line : lines) {
+                        sb.append(line.toString());
+                        sb.append('\n');
+                    }
+                    return newFixedLengthResponse(sb.toString());
+                }
+                case "GET /extract": {
+                    UUID visitId = UUID.fromString(param("visitId"));
+                    var visit = db.visits.find(visitId);
+                    var location = db.locations.find(visit.locationId);
+                    var extract = new BrowserExtract(crawl);
+                    extract.process(location.url().toString(), visit.date);
+                    return render(View.extract, "extract", extract);
+                }
                 case "GET /location":
                     Long locationId = paramLong("id");
-                    return View.location.render("location", db.locations.find(locationId),
-                            "visits", db.visits.findByLocationId(locationId));
+                    return render(View.location, "location", db.locations.find(locationId), "visits", db.visits.findByLocationId(locationId));
                 case "POST /location/add":
                     String url = param("url");
                     crawl.addSeed(url);
-                    return seeOther("/");
+                    return seeOther("/", "Added.");
                 case "GET /log":
                     boolean subresources = request.getParameters().containsKey("subresources");
                     Timestamp after = Optional.ofNullable(param("after", null))
                             .map(Timestamp::valueOf).orElse(Timestamp.from(Instant.now()));
-                    return View.log.render("log", db.paginateCrawlLog(after.toInstant(), !subresources,100),
-                            "subresources", subresources, "after", param("after", null));
-                case "GET /origin":
+                    Object[] keysAndValues = new Object[]{"log", db.paginateCrawlLog(after.toInstant(), !subresources,100), "subresources", subresources, "after", param("after", null)};
+                    return render(View.log, keysAndValues);
+                case "GET /origin": {
                     Long id = paramLong("id", null);
                     if (id == null) {
                         id = new Url(param("url")).originId();
                     }
                     Origin origin = found(db.origins.find(id));
-                    return View.origin.render("origin", origin);
+                    return render(View.origin, "origin", origin);
+                }
+                case "POST /pause":
+                    crawl.paused.set(true);
+                    return seeOther("/", "Paused.");
+                case "POST /unpause":
+                    crawl.paused.set(false);
+                    return seeOther("/", "Unpaused.");
                 case "GET /visit":
                     UUID visitId = UUID.fromString(param("id"));
-                    return View.visit.render("visit", db.visits.find(visitId),
-                            "records", db.records.findByVisitId(visitId));
+                    return render(View.visit, "visit", db.visits.find(visitId), "records", db.records.findByVisitId(visitId));
+                case "GET /record/serve": {
+                    UUID id = UUID.fromString(param("id"));
+                    Path path = Paths.get(db.warcs.findPath(id));
+                    if (path == null) throw new NotFound();
+                    String range = request.getHeaders().get("range");
+                    Matcher matcher = Pattern.compile("bytes=([0-9]+)-([0-9]+)").matcher(range);
+                    if (!matcher.matches()) throw new BadRequest("invalid range");
+                    long rangeStart = Long.parseLong(matcher.group(1));
+                    long rangeEnd = Long.parseLong(matcher.group(2));
+                    long length = rangeEnd - rangeStart - 1;
+                    if (length < 0) throw new BadRequest("negative range length");
+                    FileChannel channel = FileChannel.open(path);
+                    channel.position(rangeStart);
+                    return newFixedLengthResponse(OK, "application/warc", Channels.newInputStream(channel), length);
+                }
                 default:
                     throw new NotFound();
             }
@@ -139,6 +192,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         private Response authenticate() throws IOException, JsonParserException, SQLException {
             if (crawl.config.oidcUrl == null) {
                 session = new Session(null, "anonymous", "admin", null, Instant.MAX);
+                return null;
             }
             db.sessions.expire();
             String sessionId = request.getCookies().read(crawl.config.uiSessionCookie);
@@ -177,7 +231,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     String role = roles != null && roles.contains("admin") ? "admin" : "anonymous";
                     db.sessions.update(sessionId, info.getString("preferred_username"), role);
                 }
-                return seeOther("/");
+                return seeOther("/", "Logged in.");
             } else if (session == null || session.username == null) {
                 // create new session and redirect to auth server
                 String id = newSessionId();
@@ -185,8 +239,9 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 db.sessions.insert(id, oidcState, Instant.now().plusSeconds(crawl.config.uiSessionExpirySecs));
                 String endpoint = oidcConfig().getString("authorization_endpoint");
                 String redirectUri = contextUrl() + "/authcb";
-                Response response = seeOther(endpoint + "?response_type=code&client_id=" + URLEncoder.encode(crawl.config.oidcClientId, UTF_8) +
-                        "&redirect_uri=" + URLEncoder.encode(redirectUri, UTF_8) + "&scope=openid&state=" + URLEncoder.encode(oidcState, UTF_8));
+                String authUrl = endpoint + "?response_type=code&client_id=" + URLEncoder.encode(crawl.config.oidcClientId, UTF_8) +
+                        "&redirect_uri=" + URLEncoder.encode(redirectUri, UTF_8) + "&scope=openid&state=" + URLEncoder.encode(oidcState, UTF_8);
+                Response response = seeOther(authUrl, null);
                 response.addHeader("Set-Cookie", crawl.config.uiSessionCookie + "=" + id + "; Max-Age=" + crawl.config.uiSessionExpirySecs + "; HttpOnly");
                 return response;
             }
@@ -203,9 +258,12 @@ public class Webapp extends NanoHTTPD implements Closeable {
             return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         }
 
-        private Response seeOther(String location) {
+        private Response seeOther(String location, String flash) {
             Response response = newFixedLengthResponse(REDIRECT_SEE_OTHER, null, null);
             response.addHeader("Location", location);
+            if (flash != null) {
+                response.addHeader("Set-Cookie", "flash=" + URLEncoder.encode(flash, UTF_8) + "; HttpOnly; Max-Age=60");
+            }
             return response;
         }
 
@@ -236,6 +294,27 @@ public class Webapp extends NanoHTTPD implements Closeable {
             if (values == null || values.isEmpty() || values.get(0).isEmpty()) return defaultValue;
             return values.get(0);
         }
+
+        public Response render(View view, Object... keysAndValues) {
+            Map<String, Object> model = new HashMap<>();
+            String flash = request.getCookies().read("flash");
+            if (flash != null) {
+                request.getCookies().delete("flash");
+                model.put("flash", URLDecoder.decode(flash, UTF_8));
+            } else {
+                model.put("flash", null);
+            }
+            for (int i = 0; i < keysAndValues.length; i += 2) {
+                model.put((String)keysAndValues[i], keysAndValues[i + 1]);
+            }
+            StringWriter buffer = new StringWriter();
+            try {
+                view.template.evaluate(buffer, model);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            return newFixedLengthResponse(buffer.toString());
+        }
     }
 
     static class BadRequest extends RuntimeException {
@@ -248,26 +327,12 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin, visit;
+        home, location, log, origin, visit, extract;
 
         private final PebbleTemplate template;
 
         View() {
             this.template = pebble.getTemplate("org/netpreserve/pagedrover/templates/" + name() + ".peb");
-        }
-
-        public Response render(Object... keysAndValues) {
-            Map<String, Object> model = new HashMap<>();
-            for (int i = 0; i < keysAndValues.length; i += 2) {
-                model.put((String)keysAndValues[i], keysAndValues[i + 1]);
-            }
-            StringWriter buffer = new StringWriter();
-            try {
-                template.evaluate(buffer, model);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-            return newFixedLengthResponse(buffer.toString());
         }
     }
 

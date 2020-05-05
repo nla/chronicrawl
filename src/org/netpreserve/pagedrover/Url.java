@@ -21,6 +21,10 @@ public class Url {
         Canonicalizer.WHATWG.canonicalize(parsed);
     }
 
+    private Url(ParsedUrl parsed) {
+        this.parsed = parsed;
+    }
+
     public long id() {
         return hash(toString());
     }
@@ -97,5 +101,11 @@ public class Url {
         } else {
             throw new IllegalArgumentException("Unsupported URI scheme: " + scheme());
         }
+    }
+
+    public Url withScheme(String scheme) {
+        ParsedUrl copy = new ParsedUrl(parsed);
+        copy.setScheme(scheme);
+        return new Url(copy);
     }
 }

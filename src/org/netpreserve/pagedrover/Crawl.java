@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Crawl implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Crawl.class);
@@ -18,7 +19,7 @@ public class Crawl implements Closeable {
     final Browser browser;
     final Storage storage;
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
-    boolean paused = true;
+    final AtomicBoolean paused = new AtomicBoolean(true);
 
     public Crawl() throws IOException {
         this(new Config(), new Database());
@@ -58,7 +59,7 @@ public class Crawl implements Closeable {
     }
 
     public void step() throws IOException {
-        if (paused) {
+        if (paused.get()) {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {

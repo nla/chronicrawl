@@ -45,7 +45,14 @@ public class Main {
         Database db = new Database();
         if (initDb) db.init();
         try (Crawl crawl = new Crawl(config, db);
+             Pywb pywb = new Pywb(config);
              Webapp webapp = new Webapp(crawl, crawl.config.uiPort)) {
+            // finally block sometimes doesn't get called so use a shutdown hook too
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    try { crawl.close(); } catch (Exception e) {}
+                    try { pywb.close(); } catch (Exception e) {}
+            }));
+
             seeds.forEach(crawl::addSeed);
             crawl.run();
         }

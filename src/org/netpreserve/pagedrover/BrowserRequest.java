@@ -14,12 +14,14 @@ public class BrowserRequest {
     private final BrowserTab tab;
     private final String id;
     private final JsonObject request;
+    final String resourceType;
     boolean handled = false;
 
-    BrowserRequest(BrowserTab tab, String id, JsonObject request) {
+    BrowserRequest(BrowserTab tab, String id, JsonObject request, String resourceType) {
         this.tab = tab;
         this.id = id;
         this.request = request;
+        this.resourceType = resourceType;
     }
 
     public String url() {
@@ -34,7 +36,6 @@ public class BrowserRequest {
     public Map<String,String> headers() {
         return (Map)Collections.unmodifiableMap(request.getObject("headers"));
     }
-
 
     public void fulfill(WarcResponse warcResponse) throws IOException {
         var headers = new ArrayList<Map.Entry<String, String>>();

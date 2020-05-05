@@ -8,6 +8,7 @@ import org.codejargon.fluentjdbc.api.query.Query;
 import org.codejargon.fluentjdbc.api.query.UpdateResult;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.h2.tools.RunScript;
+import org.netpreserve.jwarc.WarcDigest;
 
 import java.io.InputStreamReader;
 import java.sql.Connection;
@@ -15,12 +16,14 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.time.ZoneOffset.UTC;
 
 public class Database implements AutoCloseable {
     private final JdbcConnectionPool jdbcPool;
@@ -134,8 +137,15 @@ public class Database implements AutoCloseable {
     }
 
     public class VisitDAO {
-        public Map<String, Object> find(UUID id) {
-            return query.select("SELECT * FROM visit WHERE id = ?").params(id).singleResult(Mappers.map());
+        public Visit find(UUID id) {
+            return query.select("SELECT * FROM visit WHERE id = ?").params(id)
+                    .singleResult(rs -> new Visit(rs.getObject("id", UUID.class),
+                            rs.getString("method"),
+                            rs.getLong("location_id"),
+                            getInstant(rs, "date"),
+                            rs.getInt("status"),
+                            rs.getString("content_type"),
+                            rs.getObject("content_length", Long.class)));
         }
 
         public List<Map<String, Object>> findByLocationId(long locationId) {
@@ -151,12 +161,12 @@ public class Database implements AutoCloseable {
     }
 
     public class RecordDAO {
-        public UUID lastResponseId(String method, long locationId) {
+        public UUID lastResponseId(String method, long locationId, Instant date) {
             return query.select("SELECT r.id FROM record r " +
                     "LEFT JOIN visit v ON v.id = r.visit_ID " +
-                    "WHERE v.method = ? AND v.location_id = ? AND r.type = 'response' " +
+                    "WHERE v.method = ? AND v.location_id = ? AND r.type = 'response' AND v.date <= ? " +
                     "ORDER BY v.date DESC LIMIT 1")
-                    .params(method, locationId)
+                    .params(method, locationId, date)
                     .firstResult(rs -> (UUID)rs.getObject("id"))
                     .orElse(null);
         }
@@ -181,6 +191,44 @@ public class Database implements AutoCloseable {
 
         public List<Map<String, Object>> findByVisitId(UUID visitId) {
             return query.select("SELECT * FROM record WHERE visit_id = ?").params(visitId).listResult(Mappers.map());
+        }
+
+        public List<CdxLine> listResponsesByLocationId(long locationId) {
+            return query.select("SELECT v.date, l.url, v.content_type, v.status, r.payload_digest, r.length, r.position, r.warc_id FROM record r " +
+                    "LEFT JOIN visit v ON v.id = r.visit_id " +
+                    "LEFT JOIN location l ON l.id = v.location_id " +
+                    "WHERE v.location_id = ? AND r.type = 'response'" +
+                    "LIMIT 1000").params(locationId)
+                    .listResult(CdxLine::new);
+        }
+    }
+
+    private static DateTimeFormatter CDX_DATE = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(UTC);
+    public class CdxLine {
+        private final Instant date;
+        private final String url;
+        private final String contentType;
+        private final int status;
+        private final byte[] payloadDigest;
+        private final long length;
+        private final long position;
+        private final UUID warcId;
+
+        CdxLine(ResultSet rs) throws SQLException {
+            date = getInstant(rs, "date");
+            url = rs.getString("url");
+            contentType = rs.getString("content_type");
+            status = rs.getInt("status");
+            payloadDigest = rs.getBytes("payload_digest");
+            length = rs.getLong("length");
+            position = rs.getLong("position");
+            warcId = rs.getObject("warc_id", UUID.class);
+        }
+
+        public String toString() {
+            String digest = new WarcDigest("sha1", payloadDigest).base32();
+            return "- " + CDX_DATE.format(date) + " " + url + " " + contentType + " " + status + " " + digest + " - - "
+                    + length + " " + position + " ?id=" + warcId;
         }
     }
 
@@ -212,6 +260,10 @@ public class Database implements AutoCloseable {
     public class WarcDAO {
         public void insert(UUID id, String path, Instant created) {
             query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(id, path, created).run();
+        }
+
+        public String findPath(UUID id) {
+            return query.select("SELECT path FROM warc WHERE id = ?").params(id).singleResult(Mappers.singleString());
         }
     }
 

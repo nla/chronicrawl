@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,7 +7,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
 
 public class Pywb implements Closeable {
     private final static Logger log = LoggerFactory.getLogger(Pywb.class);

@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;

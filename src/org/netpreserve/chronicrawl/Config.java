@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +45,7 @@ public class Config {
     /**
      * Name of the session cookie used by the Web UI
      */
-    String uiSessionCookie = "pagedroverSessionId";
+    String uiSessionCookie = "chronicrawlSessionId";
 
     /**
      * Seconds until the UI session expires
@@ -55,7 +55,7 @@ public class Config {
     /**
      * User-Agent header to send to the server
      */
-    String userAgent = "PageDrover/" + version();
+    String userAgent = "Chronicrawl/" + version();
 
     /**
      * Maximum number of bytes to read from robots.txt

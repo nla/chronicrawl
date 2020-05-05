@@ -1,9 +1,6 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import org.junit.Test;
-import org.netpreserve.pagedrover.Browser;
-import org.netpreserve.pagedrover.BrowserTab;
-import org.netpreserve.pagedrover.TestServer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

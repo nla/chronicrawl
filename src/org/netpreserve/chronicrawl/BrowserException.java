@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 public class BrowserException extends RuntimeException {
     public BrowserException(String message) {

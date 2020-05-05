@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 public class Status {
     public static final int NOT_MODIFIED = 304;

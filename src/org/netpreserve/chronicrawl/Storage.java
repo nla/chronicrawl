@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import org.netpreserve.jwarc.*;
@@ -50,7 +50,7 @@ public class Storage implements Closeable {
                 .version(MessageVersion.WARC_1_1)
                 .recordId(warcId)
                 .date(date)
-                .fields(Map.of("software", List.of("PageDrover/" + Config.version())))
+                .fields(Map.of("software", List.of("Chronicrawl/" + Config.version())))
                 .build());
         db.warcs.insert(warcId, warcPath.toString(), date);
     }

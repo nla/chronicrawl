@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 public enum CrawlPolicy {
     /** Never contact this origin under any circumstances */

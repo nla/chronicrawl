@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import fi.iki.elonen.NanoHTTPD;
 import org.slf4j.Logger;

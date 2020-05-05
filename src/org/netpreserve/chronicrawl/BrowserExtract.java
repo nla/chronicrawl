@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

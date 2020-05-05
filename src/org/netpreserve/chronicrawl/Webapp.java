@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
@@ -332,7 +332,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         private final PebbleTemplate template;
 
         View() {
-            this.template = pebble.getTemplate("org/netpreserve/pagedrover/templates/" + name() + ".peb");
+            this.template = pebble.getTemplate("org/netpreserve/chronicrawl/templates/" + name() + ".peb");
         }
     }
 

@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import com.grack.nanojson.JsonObject;
 import org.netpreserve.jwarc.WarcResponse;

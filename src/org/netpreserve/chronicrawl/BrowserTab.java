@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import com.grack.nanojson.JsonObject;
 import org.slf4j.Logger;
@@ -6,10 +6,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.InterruptedIOException;
-import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /**

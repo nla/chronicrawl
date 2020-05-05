@@ -1,4 +1,4 @@
-package org.netpreserve.pagedrover;
+package org.netpreserve.chronicrawl;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import crawlercommons.robots.SimpleRobotRules;
@@ -29,7 +29,7 @@ import java.util.concurrent.ExecutionException;
 
 import static java.nio.file.StandardOpenOption.*;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
-import static org.netpreserve.pagedrover.Location.Type.TRANSCLUSION;
+import static org.netpreserve.chronicrawl.Location.Type.TRANSCLUSION;
 
 public class Exchange implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
@@ -64,7 +64,7 @@ public class Exchange implements Closeable {
         this.location = location;
         this.method = method;
         this.extraHeaders = extraHeaders;
-        Path tempFile = Files.createTempFile("pagedrover", ".tmp");
+        Path tempFile = Files.createTempFile("chronicrawl", ".tmp");
         bufferFile = FileChannel.open(tempFile, READ, WRITE, DELETE_ON_CLOSE, TRUNCATE_EXISTING);
         url = location.url();
         this.via = location.via == null ? null : crawl.db.locations.find(location.via);

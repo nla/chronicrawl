@@ -1,7 +1,7 @@
 {% extends "./layout.peb" %}
 
 {% block content %}
-<h1>Crawler</h1>
+<h1>Chronicrawl</h1>
 <form method="post">
 {% if paused %}
     <button type="submit" formaction="/unpause">Unpause</button>

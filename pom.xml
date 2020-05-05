@@ -25,7 +25,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>org.netpreserve.chronicrawl.Crawl</mainClass>
+                            <mainClass>org.netpreserve.chronicrawl.Chronicrawl</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>

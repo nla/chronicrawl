@@ -5,7 +5,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Main {
+public class Chronicrawl {
     public static void main(String[] args) throws IOException {
         List<String> seeds = new ArrayList<>();
         boolean initDb = false;

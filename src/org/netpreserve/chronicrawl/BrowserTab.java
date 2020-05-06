@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.InterruptedIOException;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -30,7 +31,6 @@ public class BrowserTab implements Closeable {
         browser.sessionEventHandlers.put(sessionId, this::handleEvent);
         call("Page.enable", Map.of()); // for loadEventFired
         call("Page.setLifecycleEventsEnabled", Map.of("enabled", true)); // for networkidle
-        call("Log.enable", Map.of()); // for networkidle
     }
 
     public JsonObject call(String method, Map<String, Object> params) {
@@ -102,5 +102,16 @@ public class BrowserTab implements Closeable {
 
     public String screenshot() {
         return "data:image/jpeg;base64," + call("Page.captureScreenshot", Map.of("format", "jpeg")).getString("data");
+    }
+
+    public void overrideDateAndRandom(Instant date) {
+        // try to force js date and random functions to be deterministic
+        // the random function is chosen to be compatible with pywb
+        call("Page.addScriptToEvaluateOnNewDocument", Map.of("source",
+                "var RealDate = Date;" +
+                        "Date = function() { return arguments.length === 0 ? new RealDate(" + date.toEpochMilli() + ") : new (RealDate.bind.apply(Date, [null].concat(arguments))); };" +
+                        "Date.now = function() { return new Date(); };" +
+                        "var seed = " + date.toEpochMilli() + ";" +
+                        "Math.random = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }"));
     }
 }

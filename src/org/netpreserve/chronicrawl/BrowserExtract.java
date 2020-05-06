@@ -24,14 +24,7 @@ public class BrowserExtract {
     void process(Url url, Instant date, boolean recordMode) {
         try (BrowserTab tab = crawl.browser.createTab()) {
             if (crawl.config.scriptDeterminism) {
-                // try to force js date and random functions to be deterministic
-                // the random function is chosen to be compatible with pywb
-                tab.call("Page.addScriptToEvaluateOnNewDocument", Map.of("source",
-                        "var RealDate = Date;" +
-                                "Date = function() { return arguments.length === 0 ? new RealDate(" + date.toEpochMilli() + ") : new (RealDate.bind.apply(Date, [null].concat(arguments))); };" +
-                                "Date.now = function() { return new Date(); };" +
-                                "var seed = " + date.toEpochMilli() + ";" +
-                                "Math.random = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }"));
+                tab.overrideDateAndRandom(date);
             }
             tab.interceptRequests(request -> {
                 try {

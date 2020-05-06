@@ -1,6 +1,6 @@
 # Chronicrawl [<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Pocketwatch_cutaway_drawing.jpg/640px-Pocketwatch_cutaway_drawing.jpg" align="right" width="300px">](https://en.wikipedia.org/wiki/File:Pocketwatch_cutaway_drawing.jpg)
 
-Chronicrawl is an experimental web crawler for web archiving. The aim is to explore some ideas around storage budget based
+Chronicrawl is an experimental web crawler for web archiving. The goal is to explore some ideas around budget-based
 continuous crawling and mixing of browser-based crawling with traditional link extraction.
 
 ## Status

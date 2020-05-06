@@ -25,11 +25,12 @@ public class BrowserTab implements Closeable {
 
     BrowserTab(Browser browser) {
         this.browser = browser;
-        targetId = browser.call("Target.createTarget",  Map.of("url", "about:blank")).getString("targetId");
+        targetId = browser.call("Target.createTarget",  Map.of("url", "about:blank", "width", 1366, "height", 768)).getString("targetId");
         sessionId = browser.call("Target.attachToTarget", Map.of("targetId", targetId, "flatten", true)).getString("sessionId");
         browser.sessionEventHandlers.put(sessionId, this::handleEvent);
         call("Page.enable", Map.of()); // for loadEventFired
         call("Page.setLifecycleEventsEnabled", Map.of("enabled", true)); // for networkidle
+        call("Log.enable", Map.of()); // for networkidle
     }
 
     public JsonObject call(String method, Map<String, Object> params) {
@@ -100,6 +101,6 @@ public class BrowserTab implements Closeable {
     }
 
     public String screenshot() {
-        return "data:image/jpeg;base64," + call("Page.captureScreenshot", Map.of("format", "jpeg", "quality", 50)).getString("data");
+        return "data:image/jpeg;base64," + call("Page.captureScreenshot", Map.of("format", "jpeg")).getString("data");
     }
 }

@@ -122,6 +122,12 @@ public class Config {
      */
     String pywb;
 
+    /**
+     * Override Date and Math.random to try to make scripts more deterministic (beware: this currently freezes time and
+     * may break pages that expect time to advance)
+     */
+    boolean scriptDeterminism = true;
+
     static String version() {
         InputStream stream = Config.class.getResourceAsStream("/META-INF/maven/org.netpreserve/trickler/pom.properties");
         if (stream != null) {

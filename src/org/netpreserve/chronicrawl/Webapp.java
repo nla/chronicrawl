@@ -136,7 +136,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     var visit = db.visits.find(visitId);
                     var location = db.locations.find(visit.locationId);
                     var extract = new BrowserExtract(crawl);
-                    extract.process(location.url().toString(), visit.date);
+                    extract.process(location.url(), visit.date, request.getParameters().containsKey("recordMode"));
                     return render(View.extract, "extract", extract);
                 }
                 case "GET /location":

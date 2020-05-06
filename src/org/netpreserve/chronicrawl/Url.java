@@ -12,9 +12,10 @@ import java.net.*;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-public class Url {
+public class Url implements Comparable<Url> {
     private static final XXHash64 xxhash = XXHashFactory.fastestJavaInstance().hash64();
     private final ParsedUrl parsed;
+    private String ssurt;
 
     public Url(String url) {
         this.parsed = ParsedUrl.parseUrl(url);
@@ -107,5 +108,17 @@ public class Url {
         ParsedUrl copy = new ParsedUrl(parsed);
         copy.setScheme(scheme);
         return new Url(copy);
+    }
+
+    private String ssurt() {
+        if (ssurt == null) {
+            ssurt = parsed.ssurt();
+        }
+        return ssurt;
+    }
+
+    @Override
+    public int compareTo(Url o) {
+        return ssurt().compareTo(o.ssurt());
     }
 }

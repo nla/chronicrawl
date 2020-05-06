@@ -41,6 +41,14 @@ public class Crawl implements Closeable {
         db.locations.tryInsert(crawlUrl, Location.Type.PAGE, 0, now, 10);
     }
 
+    void enqueue(long from, Instant date, Url targetUrl, Location.Type type, int priority) {
+        if (db.origins.tryInsert(targetUrl.originId(), targetUrl.origin(), date)) {
+//            db.locations.tryInsert(targetUrl.resolve("/robots.txt"), Location.Type.ROBOTS, targetUrl.id(), date, 1);
+        }
+        db.locations.tryInsert(targetUrl, type, from, date, priority);
+        db.tryInsertLink(from, targetUrl.id());
+    }
+
     @Override
     public void close() {
         browser.close();

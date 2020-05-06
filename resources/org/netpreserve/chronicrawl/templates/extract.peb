@@ -10,7 +10,7 @@
 {% for subresource in extract.subresources %}
    <tr>
       <td>{{ subresource.method }}</td>
-      <td style="word-break:break-all;">{{ subresource.url }}</td>
+      <td style="word-break:break-all;">{% if subresource.responseId is not null %}<a href="location?id={{ subresource.url.id }}">{{ subresource.url }}</a>{% else %}{{ subresource.url }}{% endif %}</td>
       <td>{{ subresource.type }}</td>
       <td style="white-space: nowrap">{{ subresource.responseId }}</td>
    </tr>

@@ -5,31 +5,58 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
+
+import static org.netpreserve.chronicrawl.Location.Type.TRANSCLUSION;
 
 public class BrowserExtract {
     private static final Logger log = LoggerFactory.getLogger(BrowserExtract.class);
     private final Crawl crawl;
-    public final List<Subresource> subresources = new ArrayList<>();
+    public final Set<Subresource> subresources = new ConcurrentSkipListSet<>();
     public String screenshot;
 
     public BrowserExtract(Crawl crawl) {
         this.crawl = crawl;
     }
 
-    void process(String location, Instant date) {
+    void process(Url url, Instant date, boolean recordMode) {
         try (BrowserTab tab = crawl.browser.createTab()) {
+            if (crawl.config.scriptDeterminism) {
+                // try to force js date and random functions to be deterministic
+                // the random function is chosen to be compatible with pywb
+                tab.call("Page.addScriptToEvaluateOnNewDocument", Map.of("source",
+                        "var RealDate = Date;" +
+                                "Date = function() { return arguments.length === 0 ? new RealDate(" + date.toEpochMilli() + ") : new (RealDate.bind.apply(Date, [null].concat(arguments))); };" +
+                                "Date.now = function() { return new Date(); };" +
+                                "var seed = " + date.toEpochMilli() + ";" +
+                                "Math.random = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }"));
+            }
             tab.interceptRequests(request -> {
                 try {
-                    Url url = new Url(request.url());
-                    UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), url.id(), date);
-                    subresources.add(new Subresource(request.method(), request.url(), request.resourceType, lastVisitResponseId));
+                    Url subUrl = new Url(request.url());
+                    UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), subUrl.id(), date);
+                    subresources.add(new Subresource(request.method(), subUrl, request.resourceType, lastVisitResponseId));
                     if (lastVisitResponseId == null) {
-                        request.fail("Failed");
-                        return;
+                        if (!recordMode) {
+                            request.fail("Failed");
+                            return;
+                        }
+                        crawl.enqueue(url.id(), Instant.now(), subUrl, TRANSCLUSION, 40);
+                        Origin origin = crawl.db.origins.find(subUrl.originId());
+                        if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
+                            throw new IOException("Forbidden by crawl policy");
+                        }
+                        Location location = crawl.db.locations.find(subUrl.id());
+                        try (Exchange subexchange = new Exchange(crawl, origin, location, request.method(), request.headers())) {
+                            subexchange.run();
+                            if (subexchange.revisitOf != null) {
+                                lastVisitResponseId = subexchange.revisitOf;
+                            } else {
+                                lastVisitResponseId = subexchange.responseId;
+                            }
+                        }
                     }
                     crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
                 } catch (IOException e) {
@@ -37,7 +64,7 @@ public class BrowserExtract {
                 }
             });
             try {
-                tab.navigate(location).get();
+                tab.navigate(url.toString()).get();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             } catch (ExecutionException e) {
@@ -49,17 +76,22 @@ public class BrowserExtract {
         }
     }
 
-    public static class Subresource {
+    public static class Subresource implements Comparable<Subresource> {
         public final String method;
-        public final String url;
+        public final Url url;
         public final String type;
         public final UUID responseId;
 
-        public Subresource(String method, String url, String type, UUID responseId) {
+        public Subresource(String method, Url url, String type, UUID responseId) {
             this.method = method;
             this.url = url;
             this.type = type;
             this.responseId = responseId;
+        }
+
+        @Override
+        public int compareTo(Subresource o) {
+            return url.compareTo(o.url);
         }
     }
 }

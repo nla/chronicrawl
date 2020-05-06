@@ -163,46 +163,7 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() {
-        try (BrowserTab tab = crawl.browser.createTab()) {
-            tab.interceptRequests(request -> {
-                try {
-                    Url url = new Url(request.url());
-                    System.out.println(url);
-                    if (!request.method().equals("GET")) {
-                        throw new IOException("TODO: " + request.method() + " subrequests");
-                    }
-                    UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), url.id(), date);
-                    if (lastVisitResponseId == null) {
-                        enqueue(url, TRANSCLUSION, 40);
-                        Origin origin = crawl.db.origins.find(url.originId());
-                        if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
-                            throw new IOException("Forbidden by crawl policy");
-                        }
-                        Location location = crawl.db.locations.find(url.id());
-                        try (Exchange subexchange = new Exchange(crawl, origin, location, request.method(), request.headers())) {
-                            subexchange.run();
-                            if (subexchange.revisitOf != null) {
-                                lastVisitResponseId = subexchange.revisitOf;
-                            } else {
-                                lastVisitResponseId = subexchange.responseId;
-                            }
-                        }
-                    }
-                    crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
-                } catch (IOException e) {
-                    request.fail("Failed");
-                    log.error("Error replaying " + url, e);
-                }
-            });
-            try {
-                tab.navigate(location.url().toString()).get();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } catch (ExecutionException e) {
-                if (e.getCause() instanceof RuntimeException) throw (RuntimeException)e.getCause();
-                throw new RuntimeException(e.getCause());
-            }
-        }
+        new BrowserExtract(crawl).process(url, date, true);
     }
 
     private void processRobots() throws IOException {
@@ -214,7 +175,7 @@ public class Exchange implements Closeable {
         }
         System.out.println("robots " + rules.getSitemaps());
         for (String sitemapUrl : rules.getSitemaps()) {
-            enqueue(location.url().resolve(sitemapUrl), Location.Type.SITEMAP, 2);
+            crawl.enqueue(url.id(), date, location.url().resolve(sitemapUrl), Location.Type.SITEMAP, 2);
         }
         crawl.db.origins.updateRobots(location.url().originId(), crawlDelay, content);
     }
@@ -222,17 +183,9 @@ public class Exchange implements Closeable {
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
             Url url = location.url().resolve(entry.loc);
-            enqueue(url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
+            crawl.enqueue(url.id(), date, url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
             crawl.db.locations.updateSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
-    }
-
-    private void enqueue(Url targetUrl, Location.Type type, int priority) {
-        if (crawl.db.origins.tryInsert(targetUrl.originId(), targetUrl.origin(), date)) {
-
-        }
-        crawl.db.locations.tryInsert(targetUrl, type, location.url().id(), date, priority);
-        crawl.db.tryInsertLink(location.url().id(), targetUrl.id());
     }
 
     private void finish() {

@@ -12,7 +12,9 @@
 <nav class="top-bar">
     <ul>
         <li><a href="./">Home</a>
-        <li><a href="log">Crawl Log</a>
+        <li><a href="log">Log</a>
+        <li><a href="queue">Queue</a>
+        <li><form action="search"><input name="q" placeholder="Find URL..."></form>
     </ul>
 </nav>
 {% if flash is not null %}<div class="flash">{{ flash }}</div>{% endif %}

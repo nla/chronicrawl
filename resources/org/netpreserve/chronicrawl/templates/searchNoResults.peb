@@ -1,0 +1,13 @@
+{% extends "./layout.peb" %}
+
+{% block content %}
+<h1>Search</h1>
+
+<p>Nothing found about {{ url }}</p>
+
+<form action="location/add" method="post">
+    <input type=hidden name="url" value="{{ url }}">
+    <button type="submit">Add it as a seed</button>
+</form>
+
+{% endblock %}

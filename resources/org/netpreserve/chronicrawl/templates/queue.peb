@@ -1,0 +1,24 @@
+{% extends "./layout.peb" %}
+
+{% block title %}Crawl Queue{% endblock %}
+
+{% block content %}
+<style>
+    table tr td.date {
+        color: gray;
+    }
+</style>
+<h2>Crawl Queue</h2>
+<p>
+
+{% if locations is not empty %}
+<table>
+{% for location in locations %}
+    <tr>
+        <td>{{ location.type }}</td>
+        <td class="url"><a href="location?id={{ location.url.id }}">{{ location.url }}</a></td>
+    </tr>
+{% endfor %}
+</table>
+{% endif %}
+{% endblock %}

@@ -59,11 +59,13 @@ public class Database implements AutoCloseable {
     }
 
     public class OriginDAO {
-        private static final String fields = "id, name, robots_crawl_delay, next_visit, robots_txt, crawl_policy";
+        private static final String fields = "id, name, discovered, last_visit, next_visit, robots_crawl_delay, robots_txt, crawl_policy";
         private final Mapper<Origin> mapper = rs -> new Origin(rs.getLong("id"),
                 rs.getString("name"),
-                getLongOrNull(rs, "robots_crawl_delay"),
+                getInstant(rs, "discovered"),
+                getInstant(rs, "last_visit"),
                 getInstant(rs, "next_visit"),
+                getLongOrNull(rs, "robots_crawl_delay"),
                 rs.getBytes("robots_txt"),
                 CrawlPolicy.valueOfOrNull(rs.getString("crawl_policy")));
 
@@ -121,6 +123,19 @@ public class Database implements AutoCloseable {
                     .firstResult(mapper)
                     .orElse(null);
         }
+
+        public List<Location> peekQueue() {
+            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 100")
+                    .params(Instant.now())
+                    .listResult(mapper);
+        }
+
+        public List<Location> peekQueue(long originId) {
+            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 100")
+                    .params(Instant.now(), originId)
+                    .listResult(mapper);
+        }
+
 
         public void updateSitemapData(long locationId, Sitemap.ChangeFreq changeFreq, Float priority, String lastmod) {
             check(query.update("UPDATE location SET sitemap_changefreq = ?, sitemap_priority = ?, sitemap_lastmod = ? WHERE id = ?")

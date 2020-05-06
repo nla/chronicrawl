@@ -142,10 +142,11 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /location":
                     Long locationId = paramLong("id");
                     return render(View.location, "location", db.locations.find(locationId), "visits", db.visits.findByLocationId(locationId));
-                case "POST /location/add":
+                case "POST /location/add": {
                     String url = param("url");
                     crawl.addSeed(url);
                     return seeOther("/", "Added.");
+                }
                 case "GET /log":
                     boolean subresources = request.getParameters().containsKey("subresources");
                     Timestamp after = Optional.ofNullable(param("after", null))
@@ -158,7 +159,10 @@ public class Webapp extends NanoHTTPD implements Closeable {
                         id = new Url(param("url")).originId();
                     }
                     Origin origin = found(db.origins.find(id));
-                    return render(View.origin, "origin", origin);
+                    return render(View.origin, "origin", origin, "queue", db.locations.peekQueue(id));
+                }
+                case "GET /queue": {
+                    return render(View.queue, "locations", db.locations.peekQueue());
                 }
                 case "POST /pause":
                     crawl.paused.set(true);
@@ -166,9 +170,6 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "POST /unpause":
                     crawl.paused.set(false);
                     return seeOther("/", "Unpaused.");
-                case "GET /visit":
-                    UUID visitId = UUID.fromString(param("id"));
-                    return render(View.visit, "visit", db.visits.find(visitId), "records", db.records.findByVisitId(visitId));
                 case "GET /record/serve": {
                     UUID id = UUID.fromString(param("id"));
                     Path path = Paths.get(db.warcs.findPath(id));
@@ -184,6 +185,18 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     channel.position(rangeStart);
                     return newFixedLengthResponse(OK, "application/warc", Channels.newInputStream(channel), length);
                 }
+                case "GET /search": {
+                    String q = param("q").strip();
+                    if (q.matches("[0-9-]+") && db.locations.find(Long.parseLong(q)) != null)
+                        return seeOther("location?id=" + q);
+                    Url url = new Url(q);
+                    if (db.locations.find(url.id()) != null) return seeOther("location?id=" + url.id());
+                    if (db.origins.find(url.originId()) != null) return seeOther("origin?id=" + url.originId());
+                    return render(View.searchNoResults, "url", url);
+                }
+                case "GET /visit":
+                    UUID visitId = UUID.fromString(param("id"));
+                    return render(View.visit, "visit", db.visits.find(visitId), "records", db.records.findByVisitId(visitId));
                 default:
                     throw new NotFound();
             }
@@ -241,7 +254,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 String redirectUri = contextUrl() + "/authcb";
                 String authUrl = endpoint + "?response_type=code&client_id=" + URLEncoder.encode(crawl.config.oidcClientId, UTF_8) +
                         "&redirect_uri=" + URLEncoder.encode(redirectUri, UTF_8) + "&scope=openid&state=" + URLEncoder.encode(oidcState, UTF_8);
-                Response response = seeOther(authUrl, null);
+                Response response = seeOther(authUrl);
                 response.addHeader("Set-Cookie", crawl.config.uiSessionCookie + "=" + id + "; Max-Age=" + crawl.config.uiSessionExpirySecs + "; HttpOnly");
                 return response;
             }
@@ -256,6 +269,10 @@ public class Webapp extends NanoHTTPD implements Closeable {
             byte[] bytes = new byte[20];
             random.nextBytes(bytes);
             return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        }
+
+        private Response seeOther(String location) {
+            return seeOther(location, null);
         }
 
         private Response seeOther(String location, String flash) {
@@ -327,7 +344,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin, visit, extract;
+        home, location, log, origin, visit, extract, searchNoResults, queue;
 
         private final PebbleTemplate template;
 

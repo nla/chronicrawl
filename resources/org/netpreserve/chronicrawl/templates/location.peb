@@ -5,6 +5,7 @@
 <table>
     <tr><th>URL:</th><td><a href="{{ location.url }}">{{ location.url }}</a></td></tr>
     <tr><th>Type:</th><td>{{ location.type }}</td></tr>
+    <tr><th>Origin</th><td><a href="origin?id={{ location.url.originId }}">{{ location.url.origin }}</a></td></tr>
     <tr><th>Etag:</th><td>{{ location.etag }}</td></tr>
     <tr><th>Last-Modified:</th><td>{{ location.lastModified }}</td></tr>
 </table>

@@ -1,5 +1,33 @@
 {% extends "./layout.peb" %}
 
 {% block content %}
-<h1>Origin: {{ origin.name }}</h1>
+<h2>Origin</h2>
+
+<table>
+    <tr><th>URL prefix:</th><td>{{ origin.name }}</td></tr>
+    <tr><th>Discovered:</th><td>{{ origin.discovered }}</td></tr>
+    <tr><th>Last visit:</th><td>{{ origin.lastVisit }}</td></tr>
+    <tr><th>Next visit:</th><td>{{ origin.nextVisit }}</td></tr>
+    <tr><th>Crawl policy:</th><td>{{ origin.crawlPolicy }}</td></tr>
+    <tr><th>Robots crawl delay:</th><td>{{ origin.robotsCrawlDelay }}</td></tr>
+</table>
+
+<p>
+<details>
+    <summary>robots.txt</summary>
+    <pre>{{ origin.robotsTxtString }}</pre>
+</details>
+<p>
+<details>
+    <summary>URL queue</summary>
+    <table>
+    {% for location in queue %}
+        <tr>
+            <td>{{ location.type }}</td>
+            <td><a href="location?id={{ location.url.id }}">{{ location.url }}</a></td>
+        </tr>
+    {% endfor %}
+    </table>
+</details>
+
 {% endblock %}

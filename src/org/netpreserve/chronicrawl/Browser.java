@@ -31,8 +31,10 @@ public class Browser implements Closeable {
     private final AtomicLong idSeq = new AtomicLong(0);
     public ConcurrentHashMap<String, Consumer<JsonObject>> sessionEventHandlers = new ConcurrentHashMap<>();
     private Map<Long, CompletableFuture<JsonObject>> calls = new ConcurrentHashMap<>();
+    final ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(1);
 
     public Browser() throws IOException {
+        scheduledExecutor.setRemoveOnCancelPolicy(true);
         Process process = null;
         for (String executable : executables) {
             try {
@@ -71,7 +73,7 @@ public class Browser implements Closeable {
         }
 
         public void onMessage(String rawMessage) {
-            log.trace("< {}", rawMessage);
+            log.trace("< {}", rawMessage.length() > 1024 ? rawMessage.substring(0, 1024) + "..." : rawMessage);
             try {
                 var message = JsonParser.object().from(rawMessage);
                 if (message.has("method")) {
@@ -182,6 +184,7 @@ public class Browser implements Closeable {
     }
 
     public void close() {
+        scheduledExecutor.shutdown();
         websocket.close();
         process.destroy();
         try {

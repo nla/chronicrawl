@@ -7,10 +7,10 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.InterruptedIOException;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
 import java.util.function.Consumer;
 
 /**
@@ -18,12 +18,15 @@ import java.util.function.Consumer;
  */
 public class BrowserTab implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(BrowserTab.class);
+    private static final String scrollDownJs = Util.resource("scrollDown.js");
+    private static final String overrideDateAndRandomJs = Util.resource("overrideDateAndRandom.js");
     private final Browser browser;
     private final String targetId;
     private final String sessionId;
     private Consumer<BrowserRequest> requestInterceptor;
     private CompletableFuture<Double> loadFuture;
     private CompletableFuture<Void> networkIdleFuture;
+    private ScheduledFuture<?> idleTimeout;
     private boolean closed;
 
     BrowserTab(Browser browser) {
@@ -68,8 +71,13 @@ public class BrowserTab implements Closeable {
                 break;
             case "Page.lifecycleEvent":
                 String eventName = params.getString("name");
-                if (networkIdleFuture != null && eventName.equals("networkIdle")) {
+                if (networkIdleFuture != null && eventName.equals("networkIdle") && params.getString("frameId").equals(targetId)) {
                     networkIdleFuture.complete(null);
+//                    synchronized (this) {
+//                        if (idleTimeout != null)
+//                            idleTimeout.cancel(false);
+//                        this.idleTimeout = browser.scheduledExecutor.schedule(() -> { networkIdleFuture.complete(null);}, 1000, TimeUnit.MILLISECONDS);
+//                    }
                 }
                 break;
             default:
@@ -106,15 +114,12 @@ public class BrowserTab implements Closeable {
         return "data:image/jpeg;base64," + call("Page.captureScreenshot", Map.of("format", "jpeg")).getString("data");
     }
 
+    /**
+     * Try to force js date and random functions to be deterministic. This doesn't actually succeed in making page
+     * loading deterministic but it gets us closer. The random function is tries to match pywb.
+     */
     public void overrideDateAndRandom(Instant date) {
-        // try to force js date and random functions to be deterministic
-        // the random function is chosen to be compatible with pywb
-        call("Page.addScriptToEvaluateOnNewDocument", Map.of("source",
-                "var RealDate = Date;" +
-                        "Date = function() { return arguments.length === 0 ? new RealDate(" + date.toEpochMilli() + ") : new (RealDate.bind.apply(Date, [null].concat(arguments))); };" +
-                        "Date.now = function() { return new Date(); };" +
-                        "var seed = " + date.toEpochMilli() + ";" +
-                        "Math.random = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }"));
+        call("Page.addScriptToEvaluateOnNewDocument", Map.of("source", overrideDateAndRandomJs.replace("DATE", Long.toString(date.toEpochMilli()))));
     }
 
     private JsonObject eval(String expression) {
@@ -128,5 +133,12 @@ public class BrowserTab implements Closeable {
 
     public String title() {
         return eval("document.title").getString("value");
+    }
+
+    /**
+     * Incrementally scroll the page to the very bottom to force lazy loading content to load.
+     */
+    public void scrollDown() {
+        call("Runtime.evaluate", Map.of("expression", scrollDownJs, "awaitPromise", true));
     }
 }

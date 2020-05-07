@@ -40,7 +40,11 @@ public class BrowserAnalysis {
                 throw new RuntimeException(e.getCause());
             }
 
+
             this.screenshot = tab.screenshot();
+
+            tab.scrollDown();
+
             tab.extractLinks().forEach(link -> links.add(new Url(link)));
             this.title = tab.title();
         }

@@ -25,11 +25,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
 import static java.nio.file.StandardOpenOption.*;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
-import static org.netpreserve.chronicrawl.Location.Type.TRANSCLUSION;
 
 public class Exchange implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
@@ -163,7 +161,7 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() {
-        new BrowserExtract(crawl, url, date, true);
+        new BrowserAnalysis(crawl, url, date, true);
     }
 
     private void processRobots() throws IOException {

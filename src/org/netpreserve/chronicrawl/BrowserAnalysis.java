@@ -11,8 +11,8 @@ import java.util.concurrent.ExecutionException;
 
 import static org.netpreserve.chronicrawl.Location.Type.TRANSCLUSION;
 
-public class BrowserExtract {
-    private static final Logger log = LoggerFactory.getLogger(BrowserExtract.class);
+public class BrowserAnalysis {
+    private static final Logger log = LoggerFactory.getLogger(BrowserAnalysis.class);
     private final Crawl crawl;
     public final Set<Subresource> subresources = new ConcurrentSkipListSet<>();
     public final Set<Url> links = new ConcurrentSkipListSet<>();
@@ -22,7 +22,7 @@ public class BrowserExtract {
     public final String screenshot;
     private final boolean recordMode;
 
-    public BrowserExtract(Crawl crawl, Url url, Instant date, boolean recordMode) {
+    public BrowserAnalysis(Crawl crawl, Url url, Instant date, boolean recordMode) {
         this.crawl = crawl;
         this.url = url;
         this.date = date;

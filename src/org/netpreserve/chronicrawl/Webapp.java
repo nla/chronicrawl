@@ -117,6 +117,13 @@ public class Webapp extends NanoHTTPD implements Closeable {
             switch (request.getMethod().name() + " " + request.getUri()) {
                 case "GET /":
                     return render(View.home, "paused", crawl.paused.get());
+                case "GET /analyse": {
+                    UUID visitId = UUID.fromString(param("visitId"));
+                    var visit = db.visits.find(visitId);
+                    var location = db.locations.find(visit.locationId);
+                    var analysis = new BrowserAnalysis(crawl, location.url(), visit.date, request.getParameters().containsKey("recordMode"));
+                    return render(View.analyse, "analysis", analysis);
+                }
                 case "GET /cdx": {
                     Url url = new Url(param("url"));
                     var lines = new ArrayList<Database.CdxLine>();
@@ -130,13 +137,6 @@ public class Webapp extends NanoHTTPD implements Closeable {
                         sb.append('\n');
                     }
                     return newFixedLengthResponse(sb.toString());
-                }
-                case "GET /extract": {
-                    UUID visitId = UUID.fromString(param("visitId"));
-                    var visit = db.visits.find(visitId);
-                    var location = db.locations.find(visit.locationId);
-                    var extract = new BrowserExtract(crawl, location.url(), visit.date, request.getParameters().containsKey("recordMode"));
-                    return render(View.extract, "extract", extract);
                 }
                 case "GET /location":
                     Long locationId = paramLong("id");
@@ -349,7 +349,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin, visit, extract, searchNoResults, queue;
+        home, location, log, origin, visit, analyse, searchNoResults, queue;
 
         private final PebbleTemplate template;
 

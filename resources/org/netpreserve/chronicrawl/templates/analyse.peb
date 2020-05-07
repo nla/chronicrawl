@@ -1,23 +1,23 @@
 {% extends "./layout.peb" %}
 
 {% block content %}
-<h1>Browser Extract</h1>
+<h1>Browser Analysis</h1>
 
-<img src="{{ extract.screenshot }}" width="400px" onclick="if (this.width === this.naturalWidth) { this.width = 400; } else { this.width = this.naturalWidth; }" style="cursor: pointer">
+<img src="{{ analysis.screenshot }}" width="400px" onclick="if (this.width === this.naturalWidth) { this.width = 400; } else { this.width = this.naturalWidth; }" style="cursor: pointer">
 <p>
 
 <table>
-   <tr><th>Location:</th><td><a href="location?id={{ extract.url.id }}">{{ extract.url }}</a></td></tr>
-   <tr><th>Date:</th><td>{{ extract.date }}</td></tr>
-   <tr><th>Title:</th><td>{{ extract.title }}</td></tr>
+   <tr><th>Location:</th><td><a href="location?id={{ analysis.url.id }}">{{ analysis.url }}</a></td></tr>
+   <tr><th>Date:</th><td>{{ analysis.date }}</td></tr>
+   <tr><th>Title:</th><td>{{ analysis.title }}</td></tr>
 </table>
 
 <p>
 
 <details>
-   <summary>Subresources ({{ extract.subresources.size }})</summary>
+   <summary>Subresources ({{ analysis.subresources.size }})</summary>
    <table>
-   {% for subresource in extract.subresources %}
+   {% for subresource in analysis.subresources %}
       <tr>
          <td>{{ subresource.method }}</td>
          <td style="word-break:break-all;">{% if subresource.responseId is not null %}<a
@@ -31,9 +31,9 @@
 </details>
 
 <details>
-   <summary>Links ({{ extract.links.size }})</summary>
+   <summary>Links ({{ analysis.links.size }})</summary>
    <table>
-      {% for link in extract.links %}
+      {% for link in analysis.links %}
          <tr>
             <td style="word-break:break-all;"><a
                     href="location?id={{ link.id }}">{{ link }}</a>

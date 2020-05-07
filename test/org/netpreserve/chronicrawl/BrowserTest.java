@@ -24,7 +24,6 @@ public class BrowserTest {
             var requested = new ConcurrentSkipListSet<>();
             tab.overrideDateAndRandom(Instant.ofEpochSecond(1234567890));
             tab.interceptRequests(request -> {
-                System.out.println(request);
                 requested.add(request.url().replaceFirst(".*/", ""));
                 if (request.url().endsWith("/")) {
                     request.fulfill(200, "OK", Map.of("Content-Type", "text/html").entrySet(),
@@ -36,15 +35,11 @@ public class BrowserTest {
                                     "<img src=lazy.jpg loading=lazy>").getBytes(StandardCharsets.UTF_8));
                 }
             });
-            try {
-                tab.navigate(server.url() + "/").get();
-//                assertFalse(requested.contains("lazy.jpg")); // probably shouldn't rely on the browser not loading it
-                tab.scrollDown();
-                assertEquals("at 1234567890000", tab.title());
-                assertTrue(requested.contains("lazy.jpg"));
-            } catch (RuntimeException e) {
-                System.out.println(tab.screenshot());
-            }
+            tab.navigate(server.url() + "/").get();
+//          assertFalse(requested.contains("lazy.jpg")); // probably shouldn't rely on the browser not loading it
+            tab.scrollDown();
+            assertEquals("at 1234567890000", tab.title());
+            assertTrue(requested.contains("lazy.jpg"));
         }
     }
 

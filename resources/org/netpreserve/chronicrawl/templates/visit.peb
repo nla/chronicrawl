@@ -18,8 +18,9 @@
     </tr>
 </table>
 
-{% if replayUrl is not null %}<a href="{{ replayUrl }}" class="button">Replay</a>{% endif %}
-<a href="analyse?visitId={{ visit.id }}" class="button">Analyse</a>
-
+<nav>
+    {% if replayUrl is not null %}<a href="{{ replayUrl }}" class="button">Replay</a>{% endif %}
+    <a href="analyse?visitId={{ visit.id }}" class="button">Analyse</a>
+</nav>
 
 {% endblock %}

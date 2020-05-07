@@ -20,46 +20,17 @@ public class BrowserExtract {
     public final Instant date;
     public final String title;
     public final String screenshot;
+    private final boolean recordMode;
 
     public BrowserExtract(Crawl crawl, Url url, Instant date, boolean recordMode) {
         this.crawl = crawl;
         this.url = url;
         this.date = date;
+        this.recordMode = recordMode;
 
         try (BrowserTab tab = crawl.browser.createTab()) {
-            if (crawl.config.scriptDeterminism) {
-                tab.overrideDateAndRandom(date);
-            }
-            tab.interceptRequests(request -> {
-                try {
-                    Url subUrl = new Url(request.url());
-                    UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), subUrl.id(), date);
-                    subresources.add(new Subresource(request.method(), subUrl, request.resourceType, lastVisitResponseId));
-                    if (lastVisitResponseId == null) {
-                        if (!recordMode) {
-                            request.fail("Failed");
-                            return;
-                        }
-                        crawl.enqueue(url.id(), Instant.now(), subUrl, TRANSCLUSION, 40);
-                        Origin origin = crawl.db.origins.find(subUrl.originId());
-                        if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
-                            throw new IOException("Forbidden by crawl policy");
-                        }
-                        Location location = crawl.db.locations.find(subUrl.id());
-                        try (Exchange subexchange = new Exchange(crawl, origin, location, request.method(), request.headers())) {
-                            subexchange.run();
-                            if (subexchange.revisitOf != null) {
-                                lastVisitResponseId = subexchange.revisitOf;
-                            } else {
-                                lastVisitResponseId = subexchange.responseId;
-                            }
-                        }
-                    }
-                    crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
-                } catch (IOException e) {
-                    request.fail("Failed");
-                }
-            });
+            if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(date);
+            tab.interceptRequests(this::onRequestIntercepted);
             try {
                 tab.navigate(url.toString()).get();
             } catch (InterruptedException e) {
@@ -72,6 +43,39 @@ public class BrowserExtract {
             this.screenshot = tab.screenshot();
             tab.extractLinks().forEach(link -> links.add(new Url(link)));
             this.title = tab.title();
+        }
+    }
+
+    private void onRequestIntercepted(BrowserRequest request) {
+        try {
+            Url subUrl = new Url(request.url());
+            UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), subUrl.id(), date);
+            subresources.add(new Subresource(request.method(), subUrl, request.resourceType, lastVisitResponseId));
+            if (lastVisitResponseId == null) {
+                if (!recordMode) {
+                    request.fail("InternetDisconnected");
+                    return;
+                }
+                crawl.enqueue(url.id(), Instant.now(), subUrl, TRANSCLUSION, 40);
+                Origin origin = crawl.db.origins.find(subUrl.originId());
+                if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
+                    log.trace("Subresource forbidden by crawl policy: {}", subUrl);
+                    request.fail("AccessDenied");
+                    return;
+                }
+                Location location = crawl.db.locations.find(subUrl.id());
+                try (Exchange subexchange = new Exchange(crawl, origin, location, request.method(), request.headers())) {
+                    subexchange.run();
+                    if (subexchange.revisitOf != null) {
+                        lastVisitResponseId = subexchange.revisitOf;
+                    } else {
+                        lastVisitResponseId = subexchange.responseId;
+                    }
+                }
+            }
+            crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
+        } catch (IOException e) {
+            request.fail("Failed");
         }
     }
 

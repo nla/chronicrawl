@@ -16,14 +16,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.time.ZoneOffset.UTC;
 
 public class Database implements AutoCloseable {
     private final JdbcConnectionPool jdbcPool;
@@ -218,7 +216,6 @@ public class Database implements AutoCloseable {
         }
     }
 
-    private static DateTimeFormatter CDX_DATE = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(UTC);
     public class CdxLine {
         private final Instant date;
         private final String url;
@@ -242,7 +239,7 @@ public class Database implements AutoCloseable {
 
         public String toString() {
             String digest = new WarcDigest("sha1", payloadDigest).base32();
-            return "- " + CDX_DATE.format(date) + " " + url + " " + contentType + " " + status + " " + digest + " - - "
+            return "- " + Util.ARC_DATE.format(date) + " " + url + " " + contentType + " " + status + " " + digest + " - - "
                     + length + " " + position + " ?id=" + warcId;
         }
     }
@@ -303,7 +300,7 @@ public class Database implements AutoCloseable {
     }
 
     public List<Map<String, Object>> paginateCrawlLog(Instant after, boolean pagesOnly, int limit) {
-        return query.select("SELECT v.date, v.method, l.id location_id, l.url, v.status, v.content_type, " +
+        return query.select("SELECT v.id, v.date, v.method, l.id location_id, l.url, v.status, v.content_type, " +
                 "v.content_length " +
                 "FROM visit v " +
                 "LEFT JOIN location l ON l.id = v.location_id " +

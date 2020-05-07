@@ -28,7 +28,7 @@
         <td class="date">{{ entry.date | date("HH:mm:ss") }}</td>
         <td class="status status-{{ entry.status / 100 }}xx">{{ entry.status }}</td>
         <td class="method">{{ entry.method }}</td>
-        <td class="url"><a href="location?id={{ entry.location_id }}">{{ entry.url }}</a></td>
+        <td class="url"><a href="visit?id={{ entry.id }}">{{ entry.url }}</a></td>
         <td class="content-type">{{ entry.content_type }}</td>
         <td class="content-length">{{ entry.content_length }}</td>
     </tr>

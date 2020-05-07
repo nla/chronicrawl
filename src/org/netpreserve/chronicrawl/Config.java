@@ -122,6 +122,8 @@ public class Config {
      */
     String pywb;
 
+    int pywbPort = 8081;
+
     /**
      * Override Date and Math.random to try to make scripts more deterministic (beware: this currently freezes time and
      * may break pages that expect time to advance)

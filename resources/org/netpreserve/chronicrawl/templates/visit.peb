@@ -3,6 +3,28 @@
 {% block content %}
 <h1>Visit</h1>
 
-<a href="extract?visitId={{ visit.id }}">Extract</a>
+<table class="overview">
+    <tr>
+        <th>Location:</th>
+        <td>{{ visit.method }} <a href="location?id={{ visit.locationId }}">{{ location.url }}</a></td>
+    </tr>
+    <tr>
+        <th>Date:</th>
+        <td>{{ visit.date }}</td>
+    </tr>
+    <tr>
+        <th>Status:</th>
+        <td>{{ visit.status }}</td>
+    </tr>
+</table>
+
+<p>
+
+    <a href="extract?visitId={{ visit.id }}">Extract</a>
+    {% if replayUrl is not null %}<a href="{{ replayUrl }}">Replay</a>{% endif %}
+
+<p>
+
+
 
 {% endblock %}

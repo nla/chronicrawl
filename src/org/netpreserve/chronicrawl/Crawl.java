@@ -20,6 +20,7 @@ public class Crawl implements Closeable {
     final Storage storage;
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
     final AtomicBoolean paused = new AtomicBoolean(true);
+    final Pywb pywb;
 
     public Crawl() throws IOException {
         this(new Config(), new Database());
@@ -30,6 +31,7 @@ public class Crawl implements Closeable {
         this.db = db;
         storage = new Storage(config, db);
         browser = new Browser();
+        pywb = new Pywb(config);
     }
 
     public void addSeed(String url) {
@@ -54,6 +56,7 @@ public class Crawl implements Closeable {
         browser.close();
         db.close();
         storage.close();
+        pywb.close();
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {

@@ -3,7 +3,7 @@
 {% block content %}
 <h2>Origin</h2>
 
-<table>
+<table class="overview">
     <tr><th>URL prefix:</th><td>{{ origin.name }}</td></tr>
     <tr><th>Discovered:</th><td>{{ origin.discovered }}</td></tr>
     <tr><th>Last visit:</th><td>{{ origin.lastVisit }}</td></tr>

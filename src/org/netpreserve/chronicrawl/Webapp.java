@@ -195,7 +195,13 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 }
                 case "GET /visit":
                     UUID visitId = UUID.fromString(param("id"));
-                    return render(View.visit, "visit", db.visits.find(visitId), "records", db.records.findByVisitId(visitId));
+                    Visit visit = db.visits.find(visitId);
+                    if (visit == null) throw new NotFound();
+                    Location location = db.locations.find(visit.locationId);
+                    return render(View.visit, "visit", visit,
+                            "location", location,
+                            "records", db.records.findByVisitId(visitId),
+                            "replayUrl", crawl.pywb.replayUrl(location.url(), visit.date));
                 default:
                     throw new NotFound();
             }

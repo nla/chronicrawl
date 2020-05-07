@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.InterruptedIOException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -113,5 +115,18 @@ public class BrowserTab implements Closeable {
                         "Date.now = function() { return new Date(); };" +
                         "var seed = " + date.toEpochMilli() + ";" +
                         "Math.random = function() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }"));
+    }
+
+    private JsonObject eval(String expression) {
+        return call("Runtime.evaluate", Map.of("expression", expression, "returnByValue", true)).getObject("result");
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> extractLinks() {
+        return (List<String>)(List<?>)eval("Array.from(document.querySelectorAll('a[href]')).map(link => link.protocol+'//'+link.host+link.pathname+link.search+link.hash)").getArray("value");
+    }
+
+    public String title() {
+        return eval("document.title").getString("value");
     }
 }

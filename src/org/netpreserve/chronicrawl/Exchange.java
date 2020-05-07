@@ -163,7 +163,7 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() {
-        new BrowserExtract(crawl).process(url, date, true);
+        new BrowserExtract(crawl, url, date, true);
     }
 
     private void processRobots() throws IOException {

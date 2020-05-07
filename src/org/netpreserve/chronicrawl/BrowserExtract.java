@@ -15,13 +15,17 @@ public class BrowserExtract {
     private static final Logger log = LoggerFactory.getLogger(BrowserExtract.class);
     private final Crawl crawl;
     public final Set<Subresource> subresources = new ConcurrentSkipListSet<>();
-    public String screenshot;
+    public final Set<Url> links = new ConcurrentSkipListSet<>();
+    public final Url url;
+    public final Instant date;
+    public final String title;
+    public final String screenshot;
 
-    public BrowserExtract(Crawl crawl) {
+    public BrowserExtract(Crawl crawl, Url url, Instant date, boolean recordMode) {
         this.crawl = crawl;
-    }
+        this.url = url;
+        this.date = date;
 
-    void process(Url url, Instant date, boolean recordMode) {
         try (BrowserTab tab = crawl.browser.createTab()) {
             if (crawl.config.scriptDeterminism) {
                 tab.overrideDateAndRandom(date);
@@ -66,6 +70,8 @@ public class BrowserExtract {
             }
 
             this.screenshot = tab.screenshot();
+            tab.extractLinks().forEach(link -> links.add(new Url(link)));
+            this.title = tab.title();
         }
     }
 

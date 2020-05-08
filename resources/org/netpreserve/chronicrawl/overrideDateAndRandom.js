@@ -7,7 +7,7 @@ Date = function () {
     }
 };
 Date.now = function () {
-    return new Date();
+    return new Date().getTime();
 };
 var seed = DATE;
 Math.random = function () {

@@ -15,16 +15,17 @@
 <p>
 
 <details>
-   <summary>Subresources ({{ analysis.subresources.size }})</summary>
+   <summary>Resources ({{ analysis.resources.size }})</summary>
    <table>
-   {% for subresource in analysis.subresources %}
+   {% for resource in analysis.resources %}
       <tr>
-         <td>{{ subresource.method }}</td>
-         <td style="word-break:break-all;">{% if subresource.responseId is not null %}<a
-                 href="location?id={{ subresource.url.id }}">{{ subresource.url }}</a>{% else %}{{ subresource.url }}{% endif %}
+         <td>{{ resource.method }}</td>
+         <td style="word-break:break-all;">{% if resource.responseId is not null %}<a
+                 href="location?id={{ resource.url.id }}">{{ resource.url }}</a>{% else %}{{ resource.url }}{% endif %}
          </td>
-         <td>{{ subresource.type }}</td>
-         <td style="white-space: nowrap">{{ subresource.responseId }}</td>
+         <td>{{ resource.type }}</td>
+         <td style="white-space: nowrap">{{ resource.responseId }}</td>
+         <td style="white-space: nowrap">{{ resource.analysers }}</td>
       </tr>
    {% endfor %}
    </table>

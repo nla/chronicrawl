@@ -23,6 +23,7 @@ public class AnalyserClassic {
     private static final Pattern SRCSET = Pattern.compile("[\\s,]*(\\S*[^,\\s])(?:\\s(?:[^,(]+|\\([^)]*(?:\\)|$))*)?", Pattern.MULTILINE);
     private static final Pattern META_REFRESH = Pattern.compile("\\d+\\s*;\\s*url=['\"]?(.*?)['\"]?");
     private final Analysis analysis;
+    private boolean extraAttrs = true;
 
     public AnalyserClassic(Analysis analysis) {
         this.analysis = analysis;
@@ -43,7 +44,7 @@ public class AnalyserClassic {
                 switch (element.tagName()) {
                     case "a":
                     case "area":
-                        addResource(node.attr("abs:href"), ResourceType.Document);
+                        addLink(node.attr("abs:href"));
                         break;
                     case "audio":
                     case "track":
@@ -65,10 +66,16 @@ public class AnalyserClassic {
                             }
                         }
                         addResource(node.attr("abs:src"), type);
-                        String srcset = node.attr("srcset");
-                        for (Matcher m = SRCSET.matcher(srcset); m.lookingAt(); m.region(m.end(), m.regionEnd())) {
+                        for (Matcher m = SRCSET.matcher(node.attr("srcset")); m.lookingAt(); m.region(m.end(), m.regionEnd())) {
                             addResource(StringUtil.resolve(node.baseUri(), m.group(1)), ResourceType.Image);
                         }
+                        if (extraAttrs) {
+                            addResource(node.attr("abs:data-src"), type);
+                            for (Matcher m = SRCSET.matcher(node.attr("data-srcset")); m.lookingAt(); m.region(m.end(), m.regionEnd())) {
+                                addResource(StringUtil.resolve(node.baseUri(), m.group(1)), ResourceType.Image);
+                            }
+                        }
+
                         break;
                     case "link":
                         if ("stylesheet".equalsIgnoreCase(node.attr("rel"))) {
@@ -107,6 +114,11 @@ public class AnalyserClassic {
             public void tail(Node node, int depth) {
             }
         });
+    }
+
+    private void addLink(String url) {
+        if (url.isBlank()) return;
+        analysis.links.add(new Url(url));
     }
 
     private void parseStyleSheet(String value, String baseUrl) {
@@ -173,5 +185,4 @@ public class AnalyserClassic {
         if (url == null || url.isBlank()) return;
         analysis.addResource("GET", new Url(url), type, null, "classic");
     }
-
 }

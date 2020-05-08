@@ -122,7 +122,11 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     var visit = db.visits.find(visitId);
                     var location = db.locations.find(visit.locationId);
                     var analysis = new Analysis(location.url(), visit.date);
-                    new AnalyserBrowser(crawl, analysis, location.url(), visit.date, request.getParameters().containsKey("recordMode"));
+                    crawl.storage.readResponseForVisit(visitId, response -> new AnalyserClassic(analysis)
+                            .parseHtml(response.http().body().stream(), response.http().contentType().parameters().get("charset"), location.url().toString()));
+                    if (analysis.hasScript) {
+                        new AnalyserBrowser(crawl, analysis, request.getParameters().containsKey("recordMode"));
+                    }
                     return render(View.analyse, "analysis", analysis);
                 }
                 case "GET /cdx": {

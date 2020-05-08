@@ -18,11 +18,11 @@ public class AnalyserBrowser {
     private final Instant date;
     private final Url url;
 
-    public AnalyserBrowser(Crawl crawl, Analysis analysis, Url url, Instant date, boolean recordMode) {
+    public AnalyserBrowser(Crawl crawl, Analysis analysis, boolean recordMode) {
         this.analysis = analysis;
         this.crawl = crawl;
-        this.url = url;
-        this.date = date;
+        this.url = analysis.url;
+        this.date = analysis.date;
         this.recordMode = recordMode;
 
         try (BrowserTab tab = crawl.browser.createTab()) {
@@ -36,8 +36,7 @@ public class AnalyserBrowser {
                 if (e.getCause() instanceof RuntimeException) throw (RuntimeException)e.getCause();
                 throw new RuntimeException(e.getCause());
             }
-
-
+            
             analysis.screenshot = tab.screenshot();
 
             tab.scrollDown();

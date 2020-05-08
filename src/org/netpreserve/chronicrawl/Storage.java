@@ -133,14 +133,21 @@ public class Storage implements Closeable {
                 .build();
     }
 
+    void readResponseForVisit(UUID visitId, Util.IOConsumer<WarcResponse> consumer) throws IOException {
+        readRecord(consumer, db.records.locateByVisitId(visitId, "response"));
+    }
+
     void readResponse(UUID recordId, Util.IOConsumer<WarcResponse> consumer) throws IOException {
-        var recordLocation = db.records.locate(recordId);
+        readRecord(consumer, db.records.locate(recordId));
+    }
+
+    private void readRecord(Util.IOConsumer<WarcResponse> consumer, Database.RecordLocation recordLocation) throws IOException {
         try (FileChannel channel = FileChannel.open(Paths.get(recordLocation.path))) {
             channel.position(recordLocation.position);
             try (WarcReader warcReader = new WarcReader(channel)) {
                 WarcRecord record = warcReader.next().orElse(null);
                 if (record == null) throw new IOException("Record was missing");
-                if (!(record instanceof WarcResponse)) throw new IOException(recordId + " is a " + record.type() + " record not response");
+                if (!(record instanceof WarcResponse)) throw new IOException(record.id() + " is a " + record.type() + " record not response");
                 consumer.accept((WarcResponse) record);
             }
         }

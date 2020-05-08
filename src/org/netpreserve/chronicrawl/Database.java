@@ -195,6 +195,14 @@ public class Database implements AutoCloseable {
                     "WHERE record.id = ?").params(recordId).singleResult(RecordLocation::new);
         }
 
+
+        public RecordLocation locateByVisitId(UUID visitId, String type) {
+            return query.select("SELECT warc.path, record.position FROM record " +
+                    "LEFT JOIN warc ON warc.id = record.warc_id " +
+                    "WHERE record.visit_id = ? AND record.type = ? LIMIT 1").params(visitId, type)
+                    .singleResult(RecordLocation::new);
+        }
+
         public Optional<IdDate> findResponseByPayloadDigest(long locationId, byte[] payloadDigest) {
             return query.select("SELECT * FROM record r " +
                     "LEFT JOIN visit v ON v.id = r.visit_id " +

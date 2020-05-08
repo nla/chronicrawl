@@ -162,7 +162,7 @@ public class Exchange implements Closeable {
 
     private void processPage() {
         Analysis analysis = new Analysis(url, date);
-        new AnalyserBrowser(crawl, analysis, url, date, true);
+        new AnalyserBrowser(crawl, analysis, true);
     }
 
     private void processRobots() throws IOException {

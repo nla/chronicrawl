@@ -110,7 +110,7 @@ public class Url implements Comparable<Url> {
         return new Url(copy);
     }
 
-    private String ssurt() {
+    String ssurt() {
         if (ssurt == null) {
             ssurt = parsed.ssurt();
         }

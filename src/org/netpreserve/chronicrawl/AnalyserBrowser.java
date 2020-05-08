@@ -6,23 +6,20 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 
 import static org.netpreserve.chronicrawl.Location.Type.TRANSCLUSION;
 
-public class BrowserAnalysis {
-    private static final Logger log = LoggerFactory.getLogger(BrowserAnalysis.class);
+public class AnalyserBrowser {
+    private static final Logger log = LoggerFactory.getLogger(AnalyserBrowser.class);
     private final Crawl crawl;
-    public final Set<Subresource> subresources = new ConcurrentSkipListSet<>();
-    public final Set<Url> links = new ConcurrentSkipListSet<>();
-    public final Url url;
-    public final Instant date;
-    public final String title;
-    public final String screenshot;
     private final boolean recordMode;
+    private final Analysis analysis;
+    private final Instant date;
+    private final Url url;
 
-    public BrowserAnalysis(Crawl crawl, Url url, Instant date, boolean recordMode) {
+    public AnalyserBrowser(Crawl crawl, Analysis analysis, Url url, Instant date, boolean recordMode) {
+        this.analysis = analysis;
         this.crawl = crawl;
         this.url = url;
         this.date = date;
@@ -41,12 +38,12 @@ public class BrowserAnalysis {
             }
 
 
-            this.screenshot = tab.screenshot();
+            analysis.screenshot = tab.screenshot();
 
             tab.scrollDown();
 
-            tab.extractLinks().forEach(link -> links.add(new Url(link)));
-            this.title = tab.title();
+            tab.extractLinks().forEach(link -> analysis.links.add(new Url(link)));
+            analysis.title = tab.title();
         }
     }
 
@@ -54,7 +51,8 @@ public class BrowserAnalysis {
         try {
             Url subUrl = new Url(request.url());
             UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), subUrl.id(), date);
-            subresources.add(new Subresource(request.method(), subUrl, request.resourceType, lastVisitResponseId));
+            Analysis.ResourceType type = Analysis.ResourceType.valueOf(request.resourceType);
+            analysis.addResource(request.method(), subUrl, type, lastVisitResponseId, "browser");
             if (lastVisitResponseId == null) {
                 if (!recordMode) {
                     request.fail("InternetDisconnected");
@@ -80,25 +78,6 @@ public class BrowserAnalysis {
             crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
         } catch (IOException e) {
             request.fail("Failed");
-        }
-    }
-
-    public static class Subresource implements Comparable<Subresource> {
-        public final String method;
-        public final Url url;
-        public final String type;
-        public final UUID responseId;
-
-        public Subresource(String method, Url url, String type, UUID responseId) {
-            this.method = method;
-            this.url = url;
-            this.type = type;
-            this.responseId = responseId;
-        }
-
-        @Override
-        public int compareTo(Subresource o) {
-            return url.compareTo(o.url);
         }
     }
 }

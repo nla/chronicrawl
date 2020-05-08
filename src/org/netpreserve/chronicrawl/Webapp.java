@@ -121,7 +121,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     UUID visitId = UUID.fromString(param("visitId"));
                     var visit = db.visits.find(visitId);
                     var location = db.locations.find(visit.locationId);
-                    var analysis = new BrowserAnalysis(crawl, location.url(), visit.date, request.getParameters().containsKey("recordMode"));
+                    var analysis = new Analysis(location.url(), visit.date);
+                    new AnalyserBrowser(crawl, analysis, location.url(), visit.date, request.getParameters().containsKey("recordMode"));
                     return render(View.analyse, "analysis", analysis);
                 }
                 case "GET /cdx": {

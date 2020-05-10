@@ -67,8 +67,9 @@ public class Url implements Comparable<Url> {
     public URI toURI() {
         try {
             return new URI(parsed.getScheme(), null,
-                    parsed.getHost(), parsed.getPort().isBlank() ? 0 : Integer.parseInt(parsed.getPort()), parsed.getPath(),
-                    parsed.getQuestionMark().isEmpty() ? null : parsed.getQuery(), null);
+                    parsed.getHost(), parsed.getPort().isBlank() ? -1 : Integer.parseInt(parsed.getPort()), parsed.getPath(),
+                    parsed.getQuestionMark().isEmpty() ? null : parsed.getQuery(),
+                    parsed.getHashSign().isEmpty() ? null : parsed.getFragment());
         } catch (URISyntaxException e) {
             throw new IllegalArgumentException(e);
         }
@@ -107,6 +108,13 @@ public class Url implements Comparable<Url> {
     public Url withScheme(String scheme) {
         ParsedUrl copy = new ParsedUrl(parsed);
         copy.setScheme(scheme);
+        return new Url(copy);
+    }
+
+    public Url withoutFragment(){
+        ParsedUrl copy = new ParsedUrl(parsed);
+        copy.setFragment("");
+        copy.setHashSign("");
         return new Url(copy);
     }
 

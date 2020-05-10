@@ -41,7 +41,7 @@ public class AnalyserBrowser {
 
             tab.scrollDown();
 
-            tab.extractLinks().forEach(link -> analysis.links.add(new Url(link)));
+            tab.extractLinks().forEach(link -> analysis.addLink(new Url(link)));
             analysis.title = tab.title();
         }
     }

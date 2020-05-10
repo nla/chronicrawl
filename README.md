@@ -22,7 +22,6 @@ but many serious limitations still need to be addressed:
 * the revisit schedule is hardcoded
 * no effort has been put into performance yet, the database doesn't even have indexes
 * it only speaks HTTP/1.0 without keep-alive
-* link extraction is not yet implemented
 * essential options like url scoping are missing
 
 ## Requirements

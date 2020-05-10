@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 
 public class Analysis {
     private final Map<String, Resource> resourceMap = new ConcurrentSkipListMap<String, Resource>();
-    public final Set<Url> links = new ConcurrentSkipListSet<>();
+    private final Set<Url> links = new ConcurrentSkipListSet<>();
     public final Url url;
     public final Instant date;
     public String title;
@@ -28,6 +28,15 @@ public class Analysis {
 
     public Collection<Resource> resources() {
         return Collections.unmodifiableCollection(resourceMap.values());
+    }
+
+    public void addLink(Url url) {
+        if (!url.scheme().equals("http") && !url.scheme().equals("https")) return;
+        links.add(url.withoutFragment());
+    }
+
+    public Collection<Url> links() {
+        return Collections.unmodifiableCollection(links);
     }
 
     public enum ResourceType {

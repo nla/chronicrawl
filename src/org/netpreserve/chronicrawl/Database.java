@@ -79,8 +79,8 @@ public class Database implements AutoCloseable {
                     .firstResult(mapper).orElse(null);
         }
 
-        public boolean tryInsert(long id, String name, Instant discovered) {
-            return query.update("INSERT IGNORE INTO origin (id, name, discovered, next_visit) VALUES (?, ?, ?, ?)").params(id, name, discovered, discovered).run().affectedRows() > 0;
+        public boolean tryInsert(long id, String name, Instant discovered, CrawlPolicy crawlPolicy) {
+            return query.update("INSERT IGNORE INTO origin (id, name, discovered, next_visit, crawl_policy) VALUES (?, ?, ?, ?, ?)").params(id, name, discovered, discovered, crawlPolicy).run().affectedRows() > 0;
         }
 
         public void updateVisit(long originId, Instant lastVisit, Instant nextVisit) {
@@ -123,7 +123,11 @@ public class Database implements AutoCloseable {
         }
 
         public List<Location> peekQueue() {
-            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 100")
+            return query.select("SELECT " + fields.replaceAll("^| ", " l.") + " FROM location l " +
+                    "LEFT JOIN origin o ON o.id = l.origin_id " +
+                    "WHERE l.next_visit <= ? " +
+                    "AND o.crawl_policy = 'CONTINUOUS' " +
+                    "ORDER BY l.priority ASC, l.sitemap_priority DESC, l.next_visit ASC LIMIT 100")
                     .params(Instant.now())
                     .listResult(mapper);
         }

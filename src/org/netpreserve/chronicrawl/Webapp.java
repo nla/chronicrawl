@@ -123,7 +123,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     var location = db.locations.find(visit.locationId);
                     var analysis = new Analysis(location.url(), visit.date);
                     crawl.storage.readResponseForVisit(visitId, response -> new AnalyserClassic(analysis)
-                            .parseHtml(response.http().body().stream(), response.http().contentType().parameters().get("charset"), location.url().toString()));
+                            .parseHtml(response));
                     if (analysis.hasScript) {
                         new AnalyserBrowser(crawl, analysis, request.getParameters().containsKey("recordMode"));
                     }

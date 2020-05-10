@@ -160,9 +160,15 @@ public class Exchange implements Closeable {
         }
     }
 
-    private void processPage() {
+    private void processPage() throws IOException {
         Analysis analysis = new Analysis(url, date);
-        new AnalyserBrowser(crawl, analysis, true);
+        crawl.storage.readResponse(responseId, response -> new AnalyserClassic(analysis).parseHtml(response));
+        if (analysis.hasScript) {
+            new AnalyserBrowser(crawl, analysis, true);
+        }
+        for (Url link : analysis.links()) {
+            crawl.enqueue(url.id(), date, link, Location.Type.PAGE, 50);
+        }
     }
 
     private void processRobots() throws IOException {

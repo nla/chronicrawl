@@ -128,7 +128,7 @@ public class BrowserTab implements Closeable {
 
     @SuppressWarnings("unchecked")
     public List<String> extractLinks() {
-        return (List<String>)(List<?>)eval("Array.from(document.querySelectorAll('a[href]')).map(link => link.protocol+'//'+link.host+link.pathname+link.search+link.hash)").getArray("value");
+        return (List<String>)(List<?>)eval("Array.from(document.querySelectorAll('a[href], area[href]')).map(link => link.protocol+'//'+link.host+link.pathname+link.search+link.hash)").getArray("value");
     }
 
     public String title() {

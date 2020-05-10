@@ -9,6 +9,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.select.NodeVisitor;
 import org.netpreserve.chronicrawl.Analysis.ResourceType;
+import org.netpreserve.jwarc.WarcResponse;
 import org.w3c.css.sac.*;
 
 import java.io.IOException;
@@ -118,7 +119,7 @@ public class AnalyserClassic {
 
     private void addLink(String url) {
         if (url.isBlank()) return;
-        analysis.links.add(new Url(url));
+        analysis.addLink(new Url(url));
     }
 
     private void parseStyleSheet(String value, String baseUrl) {
@@ -147,6 +148,10 @@ public class AnalyserClassic {
         }
     }
 
+    public void parseHtml(WarcResponse response) throws IOException {
+        parseHtml(response.http().body().stream(), response.http().contentType().parameters().get("charset"), response.target());
+    }
+
     private class StyleHandler extends HandlerBase {
         private final String baseUrl;
         private ResourceType type = ResourceType.Image;
@@ -169,7 +174,6 @@ public class AnalyserClassic {
         public void endFontFace() throws CSSException {
             this.type = ResourceType.Image;
         }
-
 
         @Override
         public void property(String name, LexicalUnit value, boolean important, Locator locator) {

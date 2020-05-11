@@ -218,6 +218,10 @@ public class Config {
                 field.set(this, value);
             } else if (field.getType().equals(Boolean.TYPE)) {
                 field.setBoolean(this, Boolean.parseBoolean(value));
+            } else if (field.getType().equals(Integer.class)) {
+                field.set(this, Integer.parseInt(value));
+            } else if (field.getType().equals(Integer.TYPE)) {
+                field.setInt(this, Integer.parseInt(value));
             } else if (field.getType().equals(Long.TYPE)) {
                 field.setLong(this, Long.parseLong(value));
             } else if (field.getType().equals(DateTimeFormatter.class)) {

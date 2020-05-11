@@ -110,7 +110,7 @@ public class Database implements AutoCloseable {
     }
 
     public class LocationDAO {
-        private static final String fields = "url, type, etag, last_modified, via, depth, etag_response_id, etag_date";
+        private static final String fields = "url, type, etag, last_modified, via, depth, etag_response_id, etag_date, last_visit, next_visit, priority, sitemap_changefreq, sitemap_priority, sitemap_lastmod";
         private final Mapper<Location> mapper = rs -> new Location(new Url(rs.getString("url")),
                 Location.Type.valueOf(rs.getString("type")),
                 rs.getString("etag"),
@@ -118,7 +118,13 @@ public class Database implements AutoCloseable {
                 getLongOrNull(rs, "via"),
                 rs.getInt("depth"),
                 rs.getObject("etag_response_id", UUID.class),
-                getInstant(rs, "etag_date"));
+                getInstant(rs, "etag_date"),
+                getInstant(rs, "last_visit"),
+                getInstant(rs, "next_visit"),
+                rs.getInt("priority"),
+                rs.getString("sitemap_changefreq"),
+                rs.getFloat("sitemap_priority"),
+                rs.getString("sitemap_lastmod"));
 
         public Location find(long locationId) {
             return query.select("SELECT " + fields + " FROM location WHERE id = ? LIMIT 1")

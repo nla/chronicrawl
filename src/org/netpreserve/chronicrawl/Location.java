@@ -14,8 +14,14 @@ public class Location {
     public final int depth;
     public final UUID etagResponseId;
     public final Instant etagDate;
+    public final Instant lastVisit;
+    public final Instant nextVisit;
+    public final int priority;
+    public final String sitemapChangefreq;
+    public final float sitemapPriority;
+    public final String sitemapLastmod;
 
-    public Location(Url url, Type type, String etag, Instant lastModified, Long via, int depth, UUID etagResponseId, Instant etagDate) {
+    public Location(Url url, Type type, String etag, Instant lastModified, Long via, int depth, UUID etagResponseId, Instant etagDate, Instant lastVisit, Instant nextVisit, int priority, String sitemapChangefreq, float sitemapPriority, String sitemapLastmod) {
         this.url = requireNonNull(url, "url");
         this.type = requireNonNull(type, "type");
         this.etag = etag;
@@ -24,6 +30,12 @@ public class Location {
         this.depth = depth;
         this.etagResponseId = etagResponseId;
         this.etagDate = etagDate;
+        this.lastVisit = lastVisit;
+        this.nextVisit = nextVisit;
+        this.priority = priority;
+        this.sitemapChangefreq = sitemapChangefreq;
+        this.sitemapPriority = sitemapPriority;
+        this.sitemapLastmod = sitemapLastmod;
     }
 
     public enum Type {

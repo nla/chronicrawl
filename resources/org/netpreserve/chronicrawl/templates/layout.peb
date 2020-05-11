@@ -8,6 +8,7 @@
     nav.top-bar ul li { display: inline-block; padding: 8px; }
     .flash { background-color: lemonchiffon; padding: 16px; }
     details summary { cursor: pointer; user-select: none; }
+    table.overview th { text-align: left; }
     a.button { background-color: dodgerblue; padding: 16px 24px; border-radius: 5px; text-decoration: none;
         color: white; display: inline-block; min-width: 64px; margin: 6px; font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif;
         box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23); outline: none }

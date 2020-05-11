@@ -32,7 +32,6 @@ public class Storage implements Closeable {
     public Storage(Config config, Database db) throws IOException {
         this.config = config;
         this.db = db;
-        openNextFile();
     }
 
     private synchronized void openNextFile() throws IOException {
@@ -72,7 +71,7 @@ public class Storage implements Closeable {
                     .body(exchange.httpRequest)
                     .ipAddress(exchange.ip)
                     .build();
-            if (config.warcMaxLengthBytes > 0 && warcWriter.position() > config.warcMaxLengthBytes) {
+            if (warcWriter == null || (config.warcMaxLengthBytes > 0 && warcWriter.position() > config.warcMaxLengthBytes)) {
                 openNextFile();
             }
             writeRecord(exchange, requestId, request, null);

@@ -15,6 +15,7 @@ public class Pywb implements Closeable {
     private final Path dir;
     private final Path yaml;
     private final int port;
+    private final String externalUrl;
     boolean closed = false;
 
     Pywb(Config config) throws IOException {
@@ -35,6 +36,7 @@ public class Pywb implements Closeable {
             yaml = null;
             port = 0;
         }
+        externalUrl = config.pywbUrl == null ? null : config.pywbUrl.replaceFirst("/+$", "");
     }
 
     @Override
@@ -52,6 +54,14 @@ public class Pywb implements Closeable {
     }
 
     public String replayUrl(Url url, Instant date) {
-        return process == null ? null : "http://localhost:" + port + "/replay/" + Util.ARC_DATE.format(date) + "/" + url;
+        String prefix;
+        if (externalUrl != null) {
+            prefix = externalUrl;
+        } else if (process != null) {
+            prefix = "http://localhost:" + port + "/replay";
+        } else {
+            return null;
+        }
+        return prefix + "/" + Util.ARC_DATE.format(date) + "/" + url;
     }
 }

@@ -140,6 +140,12 @@ public class Config {
     int pywbPort = 8081;
 
     /**
+     * The URL prefix (including collection name) to use when linking to Pywb. This may be different to pywbPort when
+     * using a reverse proxy or running pywb separately.
+     */
+    public String pywbUrl;
+
+    /**
      * Override Date and Math.random to try to make scripts more deterministic (beware: this currently freezes time and
      * may break pages that expect time to advance)
      */

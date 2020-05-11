@@ -140,6 +140,11 @@ public class Config {
     int pywbPort = 8081;
 
     /**
+     * Collection name to use when running Pywb.
+     */
+    String pywbCollection = "chronicrawl";
+
+    /**
      * The URL prefix (including collection name) to use when linking to Pywb. This may be different to pywbPort when
      * using a reverse proxy or running pywb separately.
      */

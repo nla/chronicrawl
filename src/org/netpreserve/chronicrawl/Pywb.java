@@ -16,15 +16,17 @@ public class Pywb implements Closeable {
     private final Path yaml;
     private final int port;
     private final String externalUrl;
+    private final String collection;
     boolean closed = false;
 
     Pywb(Config config) throws IOException {
+        collection = config.pywbCollection;
         if (config.pywb != null) {
             dir = Files.createTempDirectory("tmpywb");
             yaml = dir.resolve("config.yaml");
             this.port = config.pywbPort;
             Files.writeString(yaml, "collections:\n" +
-                            "  replay:\n" +
+                            "  " + collection + ":\n" +
                             "    archive_paths: http://localhost:" + config.uiPort + "/record/serve\n" +
                             "    index: cdx+http://localhost:" + config.uiPort + "/cdx\n");
             process = new ProcessBuilder(config.pywb, "-p", Integer.toString(port))
@@ -58,7 +60,7 @@ public class Pywb implements Closeable {
         if (externalUrl != null) {
             prefix = externalUrl;
         } else if (process != null) {
-            prefix = "http://localhost:" + port + "/replay";
+            prefix = "http://localhost:" + port + "/" + collection;
         } else {
             return null;
         }

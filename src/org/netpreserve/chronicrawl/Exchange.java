@@ -3,10 +3,6 @@ package org.netpreserve.chronicrawl;
 import com.github.f4b6a3.uuid.UuidCreator;
 import crawlercommons.robots.SimpleRobotRules;
 import crawlercommons.robots.SimpleRobotRulesParser;
-import org.apache.hc.client5.http.async.methods.AbstractBinResponseConsumer;
-import org.apache.hc.client5.http.async.methods.SimpleHttpRequests;
-import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
-import org.apache.hc.client5.http.impl.async.HttpAsyncClients;
 import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,7 +25,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
 
 import static java.nio.file.StandardOpenOption.*;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
@@ -69,13 +64,13 @@ public class Exchange implements Closeable {
         this.extraHeaders = extraHeaders;
         Path tempFile = Files.createTempFile("chronicrawl", ".tmp");
         bufferFile = FileChannel.open(tempFile, READ, WRITE, DELETE_ON_CLOSE, TRUNCATE_EXISTING);
-        url = location.url();
+        url = location.url;
         this.via = location.via == null ? null : crawl.db.locations.find(location.via);
         crawl.exchanges.add(this);
     }
 
     public void run() throws IOException {
-        if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url().toString())) {
+        if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url.toString())) {
             fetch();
             finish();
             crawl.storage.save(this);
@@ -95,14 +90,14 @@ public class Exchange implements Closeable {
                 .addHeader("User-Agent", crawl.config.userAgent)
                 .addHeader("Connection", "close")
                 .version(MessageVersion.HTTP_1_0);
-        if (crawl.config.dedupeServer && location.etag() != null) {
-            builder.addHeader("If-None-Match", location.etag());
+        if (crawl.config.dedupeServer && location.etag != null) {
+            builder.addHeader("If-None-Match", location.etag);
         }
-        if (crawl.config.dedupeServer && location.lastModified() != null) {
-            builder.addHeader("If-Modified-Since", RFC_1123_DATE_TIME.withZone(ZoneOffset.UTC).format(location.lastModified()));
+        if (crawl.config.dedupeServer && location.lastModified != null) {
+            builder.addHeader("If-Modified-Since", RFC_1123_DATE_TIME.withZone(ZoneOffset.UTC).format(location.lastModified));
         }
         if (via != null) {
-            builder.addHeader("Referer", via.url().toString());
+            builder.addHeader("Referer", via.url.toString());
         }
         for (var entry: extraHeaders.entrySet()) {
             if (!IGNORED_EXTRA_HEADERS.contains(entry.getKey().toLowerCase(Locale.ROOT))) {
@@ -148,7 +143,7 @@ public class Exchange implements Closeable {
 
         try {
             if (Status.isSuccess(fetchStatus)) {
-                switch (location.type()) {
+                switch (location.type) {
                     case ROBOTS:
                         processRobots();
                         break;
@@ -178,21 +173,21 @@ public class Exchange implements Closeable {
 
     private void processRobots() throws IOException {
         byte[] content = httpResponse.body().stream().readNBytes(crawl.config.maxRobotsBytes);
-        SimpleRobotRules rules = parseRobots(location.url().toString(), content);
+        SimpleRobotRules rules = parseRobots(location.url.toString(), content);
         Short crawlDelay = null;
         if (rules.getCrawlDelay() > 0) {
             crawlDelay = (short)rules.getCrawlDelay();
         }
         System.out.println("robots " + rules.getSitemaps());
         for (String sitemapUrl : rules.getSitemaps()) {
-            crawl.enqueue(location, date, location.url().resolve(sitemapUrl), Location.Type.SITEMAP, 2);
+            crawl.enqueue(location, date, location.url.resolve(sitemapUrl), Location.Type.SITEMAP, 2);
         }
-        crawl.db.origins.updateRobots(location.url().originId(), crawlDelay, content);
+        crawl.db.origins.updateRobots(location.url.originId(), crawlDelay, content);
     }
 
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
-            Url url = location.url().resolve(entry.loc);
+            Url url = location.url.resolve(entry.loc);
             crawl.enqueue(location, date, url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
             crawl.db.locations.updateSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
@@ -207,13 +202,13 @@ public class Exchange implements Closeable {
             String etag = httpResponse.headers().first("ETag").orElse(null);
             Instant lastModified = httpResponse.headers().first("Last-Modified")
                     .map(s -> RFC_1123_DATE_TIME.parse(s, Instant::from)).orElse(null);
-            crawl.db.locations.updateEtagData(location.url().id(), etag, lastModified, responseId, date);
+            crawl.db.locations.updateEtagData(location.url.id(), etag, lastModified, responseId, date);
         }
 
-        crawl.db.locations.updateVisitData(location.url().id(), date, date.plus(Duration.ofDays(1)));
+        crawl.db.locations.updateVisitData(location.url.id(), date, date.plus(Duration.ofDays(1)));
         crawl.db.visits.insert(id, httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType);
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
-                location.url(), location.type(), via != null ? via.url() : "-", contentType != null ? contentType : "-");
+                location.url, location.type, via != null ? via.url : "-", contentType != null ? contentType : "-");
         System.out.flush();
     }
 

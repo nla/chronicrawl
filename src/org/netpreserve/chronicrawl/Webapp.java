@@ -158,10 +158,14 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     }
                     return newFixedLengthResponse(sb.toString());
                 }
-                case "GET /location":
+                case "GET /location": {
                     requireRole("admin");
                     Long locationId = paramLong("id");
-                    return render(View.location, "location", db.locations.find(locationId), "visits", db.visits.findByLocationId(locationId));
+                    Location location = db.locations.find(locationId);
+                    return render(View.location, "location", location,
+                            "via", location.via == null ? null : db.locations.find(location.via),
+                            "visits", db.visits.findByLocationId(locationId));
+                }
                 case "POST /location/add": {
                     requireRole("admin");
                     String url = param("url");
@@ -231,7 +235,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return render(View.visit, "visit", visit,
                             "location", location,
                             "records", db.records.findByVisitId(visitId),
-                            "replayUrl", crawl.pywb.replayUrl(location.url(), visit.date));
+                            "replayUrl", crawl.pywb.replayUrl(location.url, visit.date));
                 default:
                     throw new NotFound();
             }

@@ -27,14 +27,14 @@ public class AnalyserBrowser {
             if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(analysis.visitDate);
             tab.interceptRequests(this::onRequestIntercepted);
             try {
-                tab.navigate(analysis.location.url().toString()).get(15, TimeUnit.SECONDS);
+                tab.navigate(analysis.location.url.toString()).get(15, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof RuntimeException) throw (RuntimeException)e.getCause();
                 throw new RuntimeException(e.getCause());
             } catch (TimeoutException e) {
-                log.warn("Timed out waiting for page load {}", analysis.location.url());
+                log.warn("Timed out waiting for page load {}", analysis.location.url);
             }
 
             analysis.screenshot = tab.screenshot();

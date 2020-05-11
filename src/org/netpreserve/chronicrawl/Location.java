@@ -6,14 +6,14 @@ import java.util.UUID;
 import static java.util.Objects.requireNonNull;
 
 public class Location {
-    private final Url url;
-    private final Type type;
-    private final String etag;
-    private final Instant lastModified;
-    final Long via;
-    final int depth;
-    final UUID etagResponseId;
-    final Instant etagDate;
+    public final Url url;
+    public final Type type;
+    public final String etag;
+    public final Instant lastModified;
+    public final Long via;
+    public final int depth;
+    public final UUID etagResponseId;
+    public final Instant etagDate;
 
     public Location(Url url, Type type, String etag, Instant lastModified, Long via, int depth, UUID etagResponseId, Instant etagDate) {
         this.url = requireNonNull(url, "url");
@@ -24,22 +24,6 @@ public class Location {
         this.depth = depth;
         this.etagResponseId = etagResponseId;
         this.etagDate = etagDate;
-    }
-
-    public Url url() {
-        return url;
-    }
-
-    public Type type() {
-        return type;
-    }
-
-    public String etag() {
-        return etag;
-    }
-
-    public Instant lastModified() {
-        return lastModified;
     }
 
     public enum Type {

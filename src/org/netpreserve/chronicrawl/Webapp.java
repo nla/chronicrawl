@@ -1,9 +1,6 @@
 package org.netpreserve.chronicrawl;
 
-import com.grack.nanojson.JsonArray;
-import com.grack.nanojson.JsonObject;
-import com.grack.nanojson.JsonParser;
-import com.grack.nanojson.JsonParserException;
+import com.grack.nanojson.*;
 import com.mitchellbosecke.pebble.PebbleEngine;
 import com.mitchellbosecke.pebble.template.PebbleTemplate;
 import fi.iki.elonen.NanoHTTPD;
@@ -130,7 +127,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /":
                     requireRole("admin");
                     return render(View.home, "paused", crawl.paused.get(),
-                            "screenshots", crawl.db.screenshotCache.getN(12));
+                            "screenshots", crawl.db.screenshotCache.getN(12, ""));
                 case "GET /analyse": {
                     requireRole("admin");
                     UUID visitId = UUID.fromString(param("visitId"));
@@ -211,6 +208,19 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     requireRole("admin");
                     crawl.paused.set(false);
                     return seeOther(contextPath + "/", "Unpaused.");
+                case "GET /recent.json": {
+                    var json = JsonWriter.string().array();
+                    for (var screenshot : db.screenshotCache.getN(5, param("after", ""))) {
+                        json.object()
+                                .value("visitId", screenshot.visitId.toString())
+                                .value("screenshotDataUrl", screenshot.screenshotDataUrl())
+                                .value("url", screenshot.url.toString())
+                                .value("host", screenshot.url.host().replaceFirst("^www\\.", ""))
+                                .value("path", screenshot.url.path())
+                                .end();
+                    }
+                    return newFixedLengthResponse(OK, "application/json", json.end().done());
+                }
                 case "GET /record/serve": {
                     requireRole("admin", "pywb");
                     UUID id = UUID.fromString(param("id"));

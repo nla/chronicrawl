@@ -265,12 +265,13 @@ public class Database implements AutoCloseable {
             query.update("DELETE FROM screenshot_cache WHERE visit_id NOT IN (SELECT visit_id FROM screenshot_cache ORDER BY visit_id DESC LIMIT ?)").params(keep).run();
         }
 
-        public List<Screenshot> getN(int n) {
+        public List<Screenshot> getN(int n, String after) {
             return query.select("SELECT sc.visit_id, l.url, sc.screenshot FROM screenshot_cache sc " +
                     "LEFT JOIN visit v ON v.id = sc.visit_id " +
                     "LEFT JOIN location l ON l.id = v.location_id " +
-                    "ORDER BY v.date DESC " +
-                    "LIMIT ?").params(n).listResult(Screenshot::new);
+                    "WHERE sc.visit_id > ? " +
+                    "ORDER BY sc.visit_id DESC " +
+                    "LIMIT ?").params(after, n).listResult(Screenshot::new);
         }
     }
 

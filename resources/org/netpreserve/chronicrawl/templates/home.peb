@@ -12,7 +12,7 @@
         max-height: 300px;
         border: 1px solid #eee;
         border-radius: 8px;
-        animation: fadein 0.5s;
+        animation: fadein 2s;
     }
 
     div.screenshot-gimmick > div {

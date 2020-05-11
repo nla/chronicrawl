@@ -1,7 +1,7 @@
 {% extends "./layout.peb" %}
 
 {% block content %}
-<h1>Browser Analysis</h1>
+<h2>Browser Analysis</h2>
 
 <img src="{{ analysis.screenshotDataUrl }}" width="400px" onclick="if (this.width === this.naturalWidth) { this.width = 400; } else { this.width = this.naturalWidth; }" style="cursor: pointer">
 <p>

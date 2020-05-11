@@ -42,7 +42,7 @@ public class Chronicrawl {
         }
         config.load(System.getenv());
         config.load(System.getProperties());
-        Database db = new Database();
+        Database db = new Database(config.dbUrl, config.dbUser, config.dbPassword);
         if (initDb) db.init();
         try (Crawl crawl = new Crawl(config, db);
              Webapp webapp = new Webapp(crawl, crawl.config.uiPort)) {

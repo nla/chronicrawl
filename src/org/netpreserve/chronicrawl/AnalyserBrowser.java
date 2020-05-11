@@ -17,28 +17,24 @@ public class AnalyserBrowser {
     private final Crawl crawl;
     private final boolean recordMode;
     private final Analysis analysis;
-    private final Instant date;
-    private final Url url;
 
     public AnalyserBrowser(Crawl crawl, Analysis analysis, boolean recordMode) {
         this.analysis = analysis;
         this.crawl = crawl;
-        this.url = analysis.url;
-        this.date = analysis.date;
         this.recordMode = recordMode;
 
         try (BrowserTab tab = crawl.browser.createTab()) {
-            if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(date);
+            if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(analysis.visitDate);
             tab.interceptRequests(this::onRequestIntercepted);
             try {
-                tab.navigate(url.toString()).get(15, TimeUnit.SECONDS);
+                tab.navigate(analysis.location.url().toString()).get(15, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof RuntimeException) throw (RuntimeException)e.getCause();
                 throw new RuntimeException(e.getCause());
             } catch (TimeoutException e) {
-                log.warn("Timed out waiting for page load {}", url);
+                log.warn("Timed out waiting for page load {}", analysis.location.url());
             }
 
             analysis.screenshot = tab.screenshot();
@@ -53,7 +49,7 @@ public class AnalyserBrowser {
     private void onRequestIntercepted(BrowserRequest request) {
         try {
             Url subUrl = new Url(request.url());
-            UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), subUrl.id(), date);
+            UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), subUrl.id(), analysis.visitDate);
             Analysis.ResourceType type = Analysis.ResourceType.valueOf(request.resourceType);
             analysis.addResource(request.method(), subUrl, type, lastVisitResponseId, "browser");
             if (lastVisitResponseId == null) {
@@ -61,7 +57,7 @@ public class AnalyserBrowser {
                     request.fail("InternetDisconnected");
                     return;
                 }
-                crawl.enqueue(url.id(), Instant.now(), subUrl, TRANSCLUSION, 40);
+                crawl.enqueue(analysis.location, Instant.now(), subUrl, TRANSCLUSION, 40);
                 Origin origin = crawl.db.origins.find(subUrl.originId());
                 if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
                     log.trace("Subresource forbidden by crawl policy: {}", subUrl);

@@ -166,13 +166,13 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() throws IOException {
-        Analysis analysis = new Analysis(url, date);
+        Analysis analysis = new Analysis(location, date);
         crawl.storage.readResponse(responseId, response -> new AnalyserClassic(analysis).parseHtml(response));
         if (analysis.hasScript) {
             new AnalyserBrowser(crawl, analysis, true);
         }
         for (Url link : analysis.links()) {
-            crawl.enqueue(url.id(), date, link, Location.Type.PAGE, 50);
+            crawl.enqueue(location, date, link, Location.Type.PAGE, 50);
         }
     }
 
@@ -185,7 +185,7 @@ public class Exchange implements Closeable {
         }
         System.out.println("robots " + rules.getSitemaps());
         for (String sitemapUrl : rules.getSitemaps()) {
-            crawl.enqueue(url.id(), date, location.url().resolve(sitemapUrl), Location.Type.SITEMAP, 2);
+            crawl.enqueue(location, date, location.url().resolve(sitemapUrl), Location.Type.SITEMAP, 2);
         }
         crawl.db.origins.updateRobots(location.url().originId(), crawlDelay, content);
     }
@@ -193,7 +193,7 @@ public class Exchange implements Closeable {
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
             Url url = location.url().resolve(entry.loc);
-            crawl.enqueue(url.id(), date, url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
+            crawl.enqueue(location, date, url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
             crawl.db.locations.updateSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
     }

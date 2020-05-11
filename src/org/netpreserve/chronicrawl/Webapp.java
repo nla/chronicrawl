@@ -135,7 +135,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     UUID visitId = UUID.fromString(param("visitId"));
                     var visit = db.visits.find(visitId);
                     var location = db.locations.find(visit.locationId);
-                    var analysis = new Analysis(location.url(), visit.date);
+                    var analysis = new Analysis(location, visit.date);
                     crawl.storage.readResponseForVisit(visitId, response -> new AnalyserClassic(analysis)
                             .parseHtml(response));
                     if (analysis.hasScript) {

@@ -8,15 +8,15 @@ import java.util.concurrent.ConcurrentSkipListSet;
 public class Analysis {
     private final Map<String, Resource> resourceMap = new ConcurrentSkipListMap<String, Resource>();
     private final Set<Url> links = new ConcurrentSkipListSet<>();
-    public final Url url;
-    public final Instant date;
+    public Location location;
+    public final Instant visitDate;
     public String title;
     public String screenshot;
     public boolean hasScript;
 
-    public Analysis(Url url, Instant date) {
-        this.url = url;
-        this.date = date;
+    public Analysis(Location location, Instant visitDate) {
+        this.location = location;
+        this.visitDate = visitDate;
     }
 
     public void addResource(String method, Url url, ResourceType type, UUID responseId, String analyser) {

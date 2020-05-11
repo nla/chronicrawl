@@ -11,15 +11,17 @@ public class Location {
     private final String etag;
     private final Instant lastModified;
     final Long via;
+    final int depth;
     final UUID etagResponseId;
     final Instant etagDate;
 
-    public Location(Url url, Type type, String etag, Instant lastModified, Long via, UUID etagResponseId, Instant etagDate) {
+    public Location(Url url, Type type, String etag, Instant lastModified, Long via, int depth, UUID etagResponseId, Instant etagDate) {
         this.url = requireNonNull(url, "url");
         this.type = requireNonNull(type, "type");
         this.etag = etag;
         this.lastModified = lastModified;
         this.via = via;
+        this.depth = depth;
         this.etagResponseId = etagResponseId;
         this.etagDate = etagDate;
     }

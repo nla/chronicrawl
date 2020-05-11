@@ -42,17 +42,17 @@ public class Crawl implements Closeable {
         Url crawlUrl = new Url(url);
         Instant now = Instant.now();
         if (db.origins.tryInsert(crawlUrl.originId(), crawlUrl.origin(), now, CrawlPolicy.CONTINUOUS)) {
-            db.locations.tryInsert(crawlUrl.resolve("/robots.txt"), Location.Type.ROBOTS, crawlUrl.id(), now, 1);
+            db.locations.tryInsert(crawlUrl.resolve("/robots.txt"), Location.Type.ROBOTS, null, 0, now, 1);
         }
-        db.locations.tryInsert(crawlUrl, Location.Type.PAGE, 0, now, 10);
+        db.locations.tryInsert(crawlUrl, Location.Type.PAGE, null, 0, now, 10);
     }
 
-    void enqueue(long from, Instant date, Url targetUrl, Location.Type type, int priority) {
+    void enqueue(Location via, Instant date, Url targetUrl, Location.Type type, int priority) {
         if (db.origins.tryInsert(targetUrl.originId(), targetUrl.origin(), date, CrawlPolicy.TRANSCLUSIONS)) {
 //            db.locations.tryInsert(targetUrl.resolve("/robots.txt"), Location.Type.ROBOTS, targetUrl.id(), date, 1);
         }
-        db.locations.tryInsert(targetUrl, type, from, date, priority);
-        db.tryInsertLink(from, targetUrl.id());
+        db.locations.tryInsert(targetUrl, type, via == null ? null : via.url().id(), via == null ? 0 : via.depth + 1, date, priority);
+        db.tryInsertLink(via.url().id(), targetUrl.id());
     }
 
     @Override

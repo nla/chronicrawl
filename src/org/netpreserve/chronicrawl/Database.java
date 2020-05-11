@@ -42,6 +42,7 @@ public class Database implements AutoCloseable {
         jdbcPool = JdbcConnectionPool.create(url, user, password);
         FluentJdbc fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
         query = fluent.query();
+        migrate();
         if (serverPort != null) {
             try {
                 Server.createTcpServer("-tcp", "-tcpAllowOthers", "-tcpPort", serverPort.toString(), "-baseDir", "./data/").start();
@@ -56,6 +57,14 @@ public class Database implements AutoCloseable {
             RunScript.execute(connection, new InputStreamReader(getClass().getResourceAsStream("schema.sql"), UTF_8));
         } catch (SQLException e) {
             throw new RuntimeException("Unable to initialize db", e);
+        }
+    }
+
+    void migrate() {
+        try (Connection connection = jdbcPool.getConnection()) {
+            RunScript.execute(connection, new InputStreamReader(getClass().getResourceAsStream("migrate.sql"), UTF_8));
+        } catch (SQLException e) {
+            throw new RuntimeException("Unable to migrate db", e);
         }
     }
 
@@ -108,6 +117,7 @@ public class Database implements AutoCloseable {
                 rs.getString("etag"),
                 getInstant(rs, "last_modified"),
                 getLongOrNull(rs, "via"),
+                rs.getInt("depth"),
                 rs.getObject("etag_response_id", UUID.class),
                 getInstant(rs, "etag_date"));
 
@@ -118,9 +128,9 @@ public class Database implements AutoCloseable {
                     .orElse(null);
         }
 
-        public void tryInsert(Url url, Location.Type type, long via, Instant discovered, int priority) {
-            query.update("INSERT IGNORE INTO location (id, origin_id, via, type, url, discovered, next_visit, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-                    .params(url.id(), url.originId(), via, type, url.toString(), discovered, discovered, priority).run();
+        public void tryInsert(Url url, Location.Type type, Long via, int depth, Instant discovered, int priority) {
+            query.update("INSERT IGNORE INTO location (id, origin_id, via, depth, type, url, discovered, next_visit, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                    .params(url.id(), url.originId(), via, depth, type, url.toString(), discovered, discovered, priority).run();
         }
 
         public Location next(long originId) {

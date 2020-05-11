@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS location;
 DROP TABLE IF EXISTS origin;
 DROP TABLE IF EXISTS warc;
 DROP TABLE IF EXISTS session;
+DROP TABLE IF EXISTS recentshot;
 
 CREATE TABLE origin
 (
@@ -88,4 +89,10 @@ CREATE TABLE session (
     role ENUM('anonymous', 'admin') NOT NULL DEFAULT 'anonymous',
     oidc_state VARCHAR(30) NOT NULL,
     expiry TIMESTAMP NOT NULL
+);
+
+CREATE TABLE screenshot_cache (
+    visit_id UUID NOT NULL PRIMARY KEY,
+    screenshot BLOB NOT NULL,
+    FOREIGN KEY (visit_id) REFERENCES visit (id) ON DELETE CASCADE
 );

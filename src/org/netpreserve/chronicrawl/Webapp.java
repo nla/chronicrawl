@@ -129,7 +129,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
             switch (request.getMethod().name() + " " + relpath) {
                 case "GET /":
                     requireRole("admin");
-                    return render(View.home, "paused", crawl.paused.get());
+                    return render(View.home, "paused", crawl.paused.get(),
+                            "screenshots", crawl.db.screenshotCache.getN(12));
                 case "GET /analyse": {
                     requireRole("admin");
                     UUID visitId = UUID.fromString(param("visitId"));

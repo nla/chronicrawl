@@ -11,7 +11,7 @@ public class Analysis {
     public Location location;
     public final Instant visitDate;
     public String title;
-    public String screenshot;
+    public byte[] screenshot;
     public boolean hasScript;
 
     public Analysis(Location location, Instant visitDate) {
@@ -37,6 +37,10 @@ public class Analysis {
 
     public Collection<Url> links() {
         return Collections.unmodifiableCollection(links);
+    }
+
+    public String screenshotDataUrl() {
+        return Util.makeJpegDataUrl(screenshot);
     }
 
     public enum ResourceType {

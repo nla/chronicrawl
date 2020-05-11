@@ -55,6 +55,7 @@ public class Exchange implements Closeable {
     UUID responseId;
     byte[] digest;
     long bodyLength;
+    private Analysis analysis;
 
     public Exchange(Crawl crawl, Origin origin, Location location, String method, Map<String, String> extraHeaders) throws IOException {
         this.crawl = crawl;
@@ -161,13 +162,18 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() throws IOException {
-        Analysis analysis = new Analysis(location, date);
+        this.analysis = new Analysis(location, date);
         crawl.storage.readResponse(responseId, response -> new AnalyserClassic(analysis).parseHtml(response));
         if (analysis.hasScript) {
             new AnalyserBrowser(crawl, analysis, true);
         }
         for (Url link : analysis.links()) {
             crawl.enqueue(location, date, link, Location.Type.PAGE, 50);
+        }
+
+        if (analysis.screenshot != null) {
+            crawl.db.screenshotCache.expire(100);
+            crawl.db.screenshotCache.insert(id, analysis.screenshot);
         }
     }
 
@@ -210,6 +216,7 @@ public class Exchange implements Closeable {
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
                 location.url, location.type, via != null ? via.url : "-", contentType != null ? contentType : "-");
         System.out.flush();
+
     }
 
     private long calcDelayMillis() {

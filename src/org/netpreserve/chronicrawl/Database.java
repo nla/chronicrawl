@@ -31,6 +31,7 @@ public class Database implements AutoCloseable {
     public final OriginDAO origins = new OriginDAO();
     public final RecordDAO records = new RecordDAO();
     public final SessionDAO sessions = new SessionDAO();
+    public final ScreenshotCacheDAO screenshotCache = new ScreenshotCacheDAO();
     public final VisitDAO visits = new VisitDAO();
     public final WarcDAO warcs = new WarcDAO();
 
@@ -252,6 +253,39 @@ public class Database implements AutoCloseable {
                     "WHERE v.location_id = ? AND r.type = 'response'" +
                     "LIMIT 1000").params(locationId)
                     .listResult(CdxLine::new);
+        }
+    }
+
+    public class ScreenshotCacheDAO {
+        public void insert(UUID visitId, byte[] screenshot) {
+            query.update("INSERT INTO screenshot_cache (visit_id, screenshot) VALUES (?, ?)").params(visitId, screenshot).run();
+        }
+
+        public void expire(int keep) {
+            query.update("DELETE FROM screenshot_cache WHERE visit_id NOT IN (SELECT visit_id FROM screenshot_cache ORDER BY visit_id DESC LIMIT ?)").params(keep).run();
+        }
+
+        public List<Screenshot> getN(int n) {
+            return query.select("SELECT sc.visit_id, l.url, sc.screenshot FROM screenshot_cache sc " +
+                    "LEFT JOIN visit v ON v.id = sc.visit_id " +
+                    "LEFT JOIN location l ON l.id = v.location_id " +
+                    "LIMIT ?").params(n).listResult(Screenshot::new);
+        }
+    }
+
+    public static class Screenshot {
+        public final UUID visitId;
+        public final Url url;
+        public final byte[] screenshot;
+
+        public Screenshot(ResultSet rs) throws SQLException {
+            this.visitId = rs.getObject("visit_id", UUID.class);
+            this.url = new Url(rs.getString("url"));
+            this.screenshot = rs.getBytes("screenshot");
+        }
+
+        public String screenshotDataUrl() {
+            return Util.makeJpegDataUrl(screenshot);
         }
     }
 

@@ -1,18 +1,57 @@
 {% extends "./layout.peb" %}
 
 {% block content %}
-<h1>Chronicrawl</h1>
-<form method="post">
-{% if paused %}
-    <button type="submit" formaction="unpause">Unpause</button>
-{% else %}
-    <button type="submit" formaction="pause">Pause</button>
-{% endif %}
-</form>
+<style>
+    div.screenshot-gimmick {
+        display: flex;
+        flex-flow: row wrap;
+        max-width: 1300px;
+    }
+    .screenshot-gimmick img {
+        max-width: 300px;
+        max-height: 300px;
+        border: 1px solid #eee;
+        border-radius: 8px;
+    }
 
-<h2>Add seed</h2>
-<form action="location/add" method="post">
-    <input name="url" type="url">
-    <button type="submit">Add Seed</button>
-</form>
+    div.screenshot-gimmick > div {
+        margin: 6px;
+        max-width: 300px;
+        overflow: hidden;
+        white-space: nowrap;
+        font-size: 80%;
+        font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif;
+    }
+
+    div.screenshot-gimmick .path {
+        color: #888;
+    }
+</style>
+
+<p></p>
+<div style="display: flex">
+    <form method="post" style="margin-right: 12px; border-right: 1px solid #ccc; padding-right: 12px;">
+    {% if paused %}
+        <button type="submit" formaction="unpause">Unpause</button>
+    {% else %}
+        <button type="submit" formaction="pause">Pause</button>
+    {% endif %}
+    </form>
+
+    <form action="location/add" method="post">
+        <input name="url" type="url" placeholder="URL">
+        <button type="submit">Add Seed</button>
+    </form>
+</div>
+
+<h2>Recent captures</h2>
+<div class="screenshot-gimmick">
+    {% for screenshot in screenshots %}
+        <div>
+            <a href="visit?id={{ screenshot.visitId }}" title="{{ screenshot.url }}"><img src="{{ screenshot.screenshotDataUrl }}"></a><br>
+            <span class="host">{{ screenshot.url.host.replaceFirst("^www\.", "") }}</span><span class="path">{{ screenshot.url.path }}</span>
+        </div>
+    {% endfor %}
+</div>
+
 {% endblock %}

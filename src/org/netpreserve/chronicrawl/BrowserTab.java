@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.InterruptedIOException;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -110,8 +111,8 @@ public class BrowserTab implements Closeable {
         return CompletableFuture.allOf(networkIdleFuture, loadFuture);
     }
 
-    public String screenshot() {
-        return "data:image/jpeg;base64," + call("Page.captureScreenshot", Map.of("format", "jpeg")).getString("data");
+    public byte[] screenshot() {
+        return Base64.getDecoder().decode(call("Page.captureScreenshot", Map.of("format", "jpeg")).getString("data"));
     }
 
     /**

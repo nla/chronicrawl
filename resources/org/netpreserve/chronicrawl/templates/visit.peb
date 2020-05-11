@@ -1,7 +1,7 @@
 {% extends "./layout.peb" %}
 
 {% block content %}
-<h1>Visit</h1>
+<h2>Visit</h2>
 
 <table class="overview">
     <tr>

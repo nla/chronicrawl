@@ -1,5 +1,7 @@
 package org.netpreserve.chronicrawl;
 
+import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
+import org.apache.hc.client5.http.impl.async.HttpAsyncClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +23,7 @@ public class Crawl implements Closeable {
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
     final AtomicBoolean paused = new AtomicBoolean(true);
     final Pywb pywb;
+    final CloseableHttpAsyncClient httpClient;
 
     public Crawl() throws IOException {
         this(new Config(), new Database());
@@ -32,6 +35,7 @@ public class Crawl implements Closeable {
         storage = new Storage(config, db);
         browser = new Browser();
         pywb = new Pywb(config);
+        httpClient = HttpAsyncClients.createDefault();
     }
 
     public void addSeed(String url) {
@@ -57,6 +61,11 @@ public class Crawl implements Closeable {
         db.close();
         storage.close();
         pywb.close();
+        try {
+            httpClient.close();
+        } catch (IOException e) {
+            log.warn("Exception closing HttpClient", e);
+        }
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {

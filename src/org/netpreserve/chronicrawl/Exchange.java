@@ -3,6 +3,10 @@ package org.netpreserve.chronicrawl;
 import com.github.f4b6a3.uuid.UuidCreator;
 import crawlercommons.robots.SimpleRobotRules;
 import crawlercommons.robots.SimpleRobotRulesParser;
+import org.apache.hc.client5.http.async.methods.AbstractBinResponseConsumer;
+import org.apache.hc.client5.http.async.methods.SimpleHttpRequests;
+import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
+import org.apache.hc.client5.http.impl.async.HttpAsyncClients;
 import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +29,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 
 import static java.nio.file.StandardOpenOption.*;
 import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;

@@ -269,6 +269,7 @@ public class Database implements AutoCloseable {
             return query.select("SELECT sc.visit_id, l.url, sc.screenshot FROM screenshot_cache sc " +
                     "LEFT JOIN visit v ON v.id = sc.visit_id " +
                     "LEFT JOIN location l ON l.id = v.location_id " +
+                    "ORDER BY v.date DESC " +
                     "LIMIT ?").params(n).listResult(Screenshot::new);
         }
     }

@@ -74,6 +74,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
             response = newFixedLengthResponse(BAD_REQUEST, "text/plain", e.getMessage());
         } catch (NotFound e) {
             response = newFixedLengthResponse(NOT_FOUND, "text/plain", "404 Not found");
+        } catch (MissingRoleException e) {
+            response = newFixedLengthResponse(FORBIDDEN, NanoHTTPD.MIME_PLAINTEXT, e.getMessage());
         } catch (ResponseException e) {
             response = newFixedLengthResponse(e.getStatus(), NanoHTTPD.MIME_PLAINTEXT, e.getMessage());
         } catch (Exception e) {
@@ -105,6 +107,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     private class RequestContext {
         final IHTTPSession request;
         private Session session;
+        private String role;
 
         private RequestContext(IHTTPSession request) {
             this.request = request;
@@ -113,15 +116,22 @@ public class Webapp extends NanoHTTPD implements Closeable {
         private Response serve() throws Exception {
             if (!request.getUri().startsWith(contextPath + "/")) return seeOther(contextPath + "/");
             String relpath = request.getUri().substring(contextPath.length());
-            Response authResponse = authenticate();
-            if (authResponse != null) return authResponse;
-            if (!session.role.equals("admin")) {
-                return newFixedLengthResponse(FORBIDDEN, "text/plain", "Access denied. Missing role 'admin'.");
+
+            String pywbAuthPrefix = "/auth/" + crawl.pywb.authKey + "/";
+            if (relpath.startsWith(pywbAuthPrefix)) {
+                relpath = relpath.substring(pywbAuthPrefix.length() - 1);
+                role = "pywb";
+            } else {
+                Response authResponse = authenticate();
+                if (authResponse != null) return authResponse;
+                role = "admin";
             }
             switch (request.getMethod().name() + " " + relpath) {
                 case "GET /":
+                    requireRole("admin");
                     return render(View.home, "paused", crawl.paused.get());
                 case "GET /analyse": {
+                    requireRole("admin");
                     UUID visitId = UUID.fromString(param("visitId"));
                     var visit = db.visits.find(visitId);
                     var location = db.locations.find(visit.locationId);
@@ -134,6 +144,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return render(View.analyse, "analysis", analysis);
                 }
                 case "GET /cdx": {
+                    requireRole("admin", "pywb");
                     Url url = new Url(param("url"));
                     var lines = new ArrayList<Database.CdxLine>();
                     lines.addAll(db.records.listResponsesByLocationId(url.id()));
@@ -148,20 +159,24 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return newFixedLengthResponse(sb.toString());
                 }
                 case "GET /location":
+                    requireRole("admin");
                     Long locationId = paramLong("id");
                     return render(View.location, "location", db.locations.find(locationId), "visits", db.visits.findByLocationId(locationId));
                 case "POST /location/add": {
+                    requireRole("admin");
                     String url = param("url");
                     crawl.addSeed(url);
                     return seeOther(contextPath + "/", "Added.");
                 }
                 case "GET /log":
+                    requireRole("admin");
                     boolean subresources = request.getParameters().containsKey("subresources");
                     Timestamp after = Optional.ofNullable(param("after", null))
                             .map(Timestamp::valueOf).orElse(Timestamp.from(Instant.now()));
                     Object[] keysAndValues = new Object[]{"log", db.paginateCrawlLog(after.toInstant(), !subresources,100), "subresources", subresources, "after", param("after", null)};
                     return render(View.log, keysAndValues);
                 case "GET /origin": {
+                    requireRole("admin");
                     Long id = paramLong("id", null);
                     if (id == null) {
                         id = new Url(param("url")).originId();
@@ -170,15 +185,19 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return render(View.origin, "origin", origin, "queue", db.locations.peekQueue(id));
                 }
                 case "GET /queue": {
+                    requireRole("admin");
                     return render(View.queue, "locations", db.locations.peekQueue());
                 }
                 case "POST /pause":
+                    requireRole("admin");
                     crawl.paused.set(true);
                     return seeOther(contextPath + "/", "Paused.");
                 case "POST /unpause":
+                    requireRole("admin");
                     crawl.paused.set(false);
                     return seeOther(contextPath + "/", "Unpaused.");
                 case "GET /record/serve": {
+                    requireRole("admin", "pywb");
                     UUID id = UUID.fromString(param("id"));
                     Path path = Paths.get(db.warcs.findPath(id));
                     if (path == null) throw new NotFound();
@@ -194,6 +213,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return newFixedLengthResponse(OK, "application/warc", Channels.newInputStream(channel), length);
                 }
                 case "GET /search": {
+                    requireRole("admin");
                     String q = param("q").strip();
                     if (q.matches("[0-9-]+") && db.locations.find(Long.parseLong(q)) != null)
                         return seeOther("location?id=" + q);
@@ -203,6 +223,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return render(View.searchNoResults, "url", url);
                 }
                 case "GET /visit":
+                    requireRole("admin");
                     UUID visitId = UUID.fromString(param("id"));
                     Visit visit = db.visits.find(visitId);
                     if (visit == null) throw new NotFound();
@@ -214,6 +235,15 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 default:
                     throw new NotFound();
             }
+        }
+
+        private void requireRole(String... requiredRoles) {
+            for (String requiredRole : requiredRoles) {
+                if (requiredRole.equals(this.role)) {
+                    return;
+                }
+            }
+            throw new MissingRoleException("Access denied. One of the following roles must be assigned: " + List.of(requiredRoles).toString());
         }
 
         private Response authenticate() throws IOException, JsonParserException, SQLException {
@@ -356,6 +386,12 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     static class NotFound extends RuntimeException {
+    }
+
+    static class MissingRoleException extends RuntimeException {
+        public MissingRoleException(String message) {
+            super(message);
+        }
     }
 
     private enum View {

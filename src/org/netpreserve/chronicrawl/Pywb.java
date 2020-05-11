@@ -7,7 +7,9 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 
 public class Pywb implements Closeable {
     private final static Logger log = LoggerFactory.getLogger(Pywb.class);
@@ -17,6 +19,7 @@ public class Pywb implements Closeable {
     private final int port;
     private final String externalUrl;
     private final String collection;
+    final String authKey = generateKey();
     boolean closed = false;
 
     Pywb(Config config) throws IOException {
@@ -27,8 +30,8 @@ public class Pywb implements Closeable {
             this.port = config.pywbPort;
             Files.writeString(yaml, "collections:\n" +
                             "  " + collection + ":\n" +
-                            "    archive_paths: http://localhost:" + config.uiPort + "/record/serve\n" +
-                            "    index: cdx+http://localhost:" + config.uiPort + "/cdx\n");
+                            "    archive_paths: http://localhost:" + config.uiPort + config.uiContextPath + "/auth/" + authKey + "/record/serve\n" +
+                            "    index: cdx+http://localhost:" + config.uiPort + config.uiContextPath + "/auth/" + authKey + "/cdx\n");
             process = new ProcessBuilder(config.pywb, "-p", Integer.toString(port))
                     .directory(dir.toFile())
                     .inheritIO().start();
@@ -65,5 +68,11 @@ public class Pywb implements Closeable {
             return null;
         }
         return prefix + "/" + Util.ARC_DATE.format(date) + "/" + url;
+    }
+
+    private String generateKey() {
+        byte[] key = new byte[20];
+        new SecureRandom().nextBytes(key);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(key);
     }
 }

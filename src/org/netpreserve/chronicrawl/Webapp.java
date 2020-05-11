@@ -224,7 +224,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
             db.sessions.expire();
             String sessionId = request.getCookies().read(crawl.config.uiSessionCookie);
             this.session = sessionId == null ? null : db.sessions.find(sessionId).orElse(null);
-            if (session != null && request.getUri().equals("/authcb") && param("state").equals(session.oidcState)) {
+            if (session != null && request.getUri().equals(contextPath + "/authcb") && param("state").equals(session.oidcState)) {
                 // exchange code for access token
                 var conn = (HttpURLConnection) new URL(oidcConfig().getString("token_endpoint")).openConnection();
                 conn.setRequestMethod("POST");
@@ -276,7 +276,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         }
 
         private String contextUrl() {
-            return request.getHeaders().getOrDefault("X-Forwarded-Proto", "http") + "://" + request.getHeaders().get("host");
+            return request.getHeaders().getOrDefault("X-Forwarded-Proto", "http") + "://" + request.getHeaders().get("host") + contextPath;
         }
 
         private String newSessionId() {

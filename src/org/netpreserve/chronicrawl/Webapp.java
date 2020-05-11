@@ -306,7 +306,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         }
 
         private String contextUrl() {
-            return request.getHeaders().getOrDefault("X-Forwarded-Proto", "http") + "://" + request.getHeaders().get("host") + contextPath;
+            return request.getHeaders().getOrDefault("x-forwarded-proto", "http") + "://" + request.getHeaders().get("host") + contextPath;
         }
 
         private String newSessionId() {

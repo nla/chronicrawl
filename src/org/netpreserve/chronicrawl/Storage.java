@@ -169,7 +169,7 @@ public class Storage implements Closeable {
 
     public synchronized void close() {
         try {
-            warcWriter.close();
+            if (warcWriter != null) warcWriter.close();
         } catch (IOException e) {
             log.error("Error closing storage", e);
         }

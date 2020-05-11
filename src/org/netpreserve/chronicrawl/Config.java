@@ -97,7 +97,7 @@ public class Config {
     /**
      * Template for construct WARC filenames. Variables: {TIMESTAMP} {SEQNO}
      */
-    String warcFilename = "data/trickler-{TIMESTAMP}-{SEQNO}.warc.gz";
+    String warcFilename = "data/trickler-{TIMESTAMP}-{SEQNO}.warc";
 
     /**
      * Format of the {TIMESTAMP} variable in warcFilename

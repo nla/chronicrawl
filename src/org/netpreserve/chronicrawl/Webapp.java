@@ -41,12 +41,14 @@ public class Webapp extends NanoHTTPD implements Closeable {
 
     private final Crawl crawl;
     private final Database db;
+    private final String contextPath;
     private JsonObject oidcConfig;
 
     public Webapp(Crawl crawl, int port) throws IOException {
         super(port);
         this.crawl = crawl;
         this.db = crawl.db;
+        this.contextPath = crawl.config.uiContextPath.replaceFirst("/+$", "");
         start();
     }
 
@@ -109,12 +111,14 @@ public class Webapp extends NanoHTTPD implements Closeable {
         }
 
         private Response serve() throws Exception {
+            if (!request.getUri().startsWith(contextPath + "/")) return seeOther(contextPath + "/");
+            String relpath = request.getUri().substring(contextPath.length());
             Response authResponse = authenticate();
             if (authResponse != null) return authResponse;
             if (!session.role.equals("admin")) {
                 return newFixedLengthResponse(FORBIDDEN, "text/plain", "Access denied. Missing role 'admin'.");
             }
-            switch (request.getMethod().name() + " " + request.getUri()) {
+            switch (request.getMethod().name() + " " + relpath) {
                 case "GET /":
                     return render(View.home, "paused", crawl.paused.get());
                 case "GET /analyse": {
@@ -149,7 +153,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "POST /location/add": {
                     String url = param("url");
                     crawl.addSeed(url);
-                    return seeOther("/", "Added.");
+                    return seeOther(contextPath + "/", "Added.");
                 }
                 case "GET /log":
                     boolean subresources = request.getParameters().containsKey("subresources");
@@ -170,10 +174,10 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 }
                 case "POST /pause":
                     crawl.paused.set(true);
-                    return seeOther("/", "Paused.");
+                    return seeOther(contextPath + "/", "Paused.");
                 case "POST /unpause":
                     crawl.paused.set(false);
-                    return seeOther("/", "Unpaused.");
+                    return seeOther(contextPath + "/", "Unpaused.");
                 case "GET /record/serve": {
                     UUID id = UUID.fromString(param("id"));
                     Path path = Paths.get(db.warcs.findPath(id));
@@ -254,7 +258,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     String role = roles != null && roles.contains("admin") ? "admin" : "anonymous";
                     db.sessions.update(sessionId, info.getString("preferred_username"), role);
                 }
-                return seeOther("/", "Logged in.");
+                return seeOther(contextPath + "/", "Logged in.");
             } else if (session == null || session.username == null) {
                 // create new session and redirect to auth server
                 String id = newSessionId();
@@ -324,6 +328,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
 
         public Response render(View view, Object... keysAndValues) {
             Map<String, Object> model = new HashMap<>();
+            model.put("contextPath", contextPath);
             String flash = request.getCookies().read("flash");
             if (flash != null) {
                 request.getCookies().delete("flash");

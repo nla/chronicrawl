@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset=utf-8>
-<base href="/">
+<base href="{{ contextPath }}/">
 <style>
     a { text-decoration: none; }
     a:hover { text-decoration: underline; }

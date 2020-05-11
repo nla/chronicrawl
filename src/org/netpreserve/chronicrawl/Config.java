@@ -45,6 +45,11 @@ public class Config {
     InetAddress bindAddress;
 
     /**
+     * URL prefix for the UI.
+     */
+    public String uiContextPath = "";
+
+    /**
      * Listening port of the web user interface
      */
     int uiPort = 8080;

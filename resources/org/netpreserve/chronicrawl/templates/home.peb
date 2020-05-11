@@ -4,14 +4,14 @@
 <h1>Chronicrawl</h1>
 <form method="post">
 {% if paused %}
-    <button type="submit" formaction="/unpause">Unpause</button>
+    <button type="submit" formaction="unpause">Unpause</button>
 {% else %}
-    <button type="submit" formaction="/pause">Pause</button>
+    <button type="submit" formaction="pause">Pause</button>
 {% endif %}
 </form>
 
 <h2>Add seed</h2>
-<form action="/location/add" method="post">
+<form action="location/add" method="post">
     <input name="url" type="url">
     <button type="submit">Add Seed</button>
 </form>

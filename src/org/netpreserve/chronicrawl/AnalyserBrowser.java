@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.netpreserve.chronicrawl.Location.Type.TRANSCLUSION;
 
@@ -29,14 +31,16 @@ public class AnalyserBrowser {
             if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(date);
             tab.interceptRequests(this::onRequestIntercepted);
             try {
-                tab.navigate(url.toString()).get();
+                tab.navigate(url.toString()).get(15, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof RuntimeException) throw (RuntimeException)e.getCause();
                 throw new RuntimeException(e.getCause());
+            } catch (TimeoutException e) {
+                log.warn("Timed out waiting for page load {}", url);
             }
-            
+
             analysis.screenshot = tab.screenshot();
 
             tab.scrollDown();

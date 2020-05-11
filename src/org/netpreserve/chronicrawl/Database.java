@@ -110,7 +110,7 @@ public class Database implements AutoCloseable {
     }
 
     public class LocationDAO {
-        private static final String fields = "url, type, etag, last_modified, via, etag_response_id, etag_date";
+        private static final String fields = "url, type, etag, last_modified, via, depth, etag_response_id, etag_date";
         private final Mapper<Location> mapper = rs -> new Location(new Url(rs.getString("url")),
                 Location.Type.valueOf(rs.getString("type")),
                 rs.getString("etag"),

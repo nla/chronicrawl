@@ -186,7 +186,17 @@ public class Webapp extends NanoHTTPD implements Closeable {
                         id = new Url(param("url")).originId();
                     }
                     Origin origin = found(db.origins.find(id));
-                    return render(View.origin, "origin", origin, "queue", db.locations.peekQueue(id));
+                    return render(View.origin, "origin", origin,
+                            "queue", db.locations.peekQueue(id),
+                            "allCrawlPolicies", CrawlPolicy.values());
+                }
+                case "POST /origin/update": {
+                    requireRole("admin");
+                    Long id = paramLong("id", null);
+                    Origin old = db.origins.find(id);
+                    CrawlPolicy crawlPolicy = CrawlPolicy.valueOf(param("crawlPolicy"));
+                    db.origins.updateCrawlPolicy(id, crawlPolicy);
+                    return seeOther(contextPath + "/origin?id=" + id, "Changed crawl policy from " + old.crawlPolicy + " to " + crawlPolicy + ".");
                 }
                 case "GET /queue": {
                     requireRole("admin");

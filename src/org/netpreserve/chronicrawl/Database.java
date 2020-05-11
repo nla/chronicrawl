@@ -107,6 +107,10 @@ public class Database implements AutoCloseable {
             check(query.update("UPDATE origin SET robots_crawl_delay = ?, robots_txt = ? WHERE id = ?")
                     .params(crawlDelay, robotsTxt, originId).run());
         }
+
+        public void updateCrawlPolicy(Long id, CrawlPolicy crawlPolicy) {
+            check(query.update("UPDATE origin SET crawl_policy = ? WHERE id = ?").params(crawlPolicy, id).run());
+        }
     }
 
     public class LocationDAO {

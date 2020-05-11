@@ -3,14 +3,24 @@
 {% block content %}
 <h2>Origin</h2>
 
-<table class="overview">
-    <tr><th>URL prefix:</th><td>{{ origin.name }}</td></tr>
-    <tr><th>Discovered:</th><td>{{ origin.discovered }}</td></tr>
-    <tr><th>Last visit:</th><td>{{ origin.lastVisit }}</td></tr>
-    <tr><th>Next visit:</th><td>{{ origin.nextVisit }}</td></tr>
-    <tr><th>Crawl policy:</th><td>{{ origin.crawlPolicy }}</td></tr>
-    <tr><th>Robots crawl delay:</th><td>{{ origin.robotsCrawlDelay }}</td></tr>
-</table>
+<form action="origin/update" method="post">
+    <input type="hidden" name="id" value="{{ origin.id }}">
+    <table class="overview">
+        <tr><th>URL prefix:</th><td>{{ origin.name }}</td></tr>
+        <tr><th>Discovered:</th><td>{{ origin.discovered }}</td></tr>
+        <tr><th>Last visit:</th><td>{{ origin.lastVisit }}</td></tr>
+        <tr><th>Next visit:</th><td>{{ origin.nextVisit }}</td></tr>
+        <tr><th><label for="crawlPolicy">Crawl policy:</label></th>
+            <td>
+                <select id="crawlPolicy" name="crawlPolicy" onchange="form.submit()">
+                    {% for crawlPolicy in allCrawlPolicies %}
+                        <option{% if crawlPolicy == origin.crawlPolicy %} selected{% endif %}>{{ crawlPolicy.name }}</option>
+                    {% endfor %}
+                </select>
+            </td></tr>
+        <tr><th>Robots crawl delay:</th><td>{{ origin.robotsCrawlDelay }}</td></tr>
+    </table>
+</form>
 
 <p>
 <details>

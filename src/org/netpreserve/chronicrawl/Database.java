@@ -42,7 +42,6 @@ public class Database implements AutoCloseable {
         jdbcPool = JdbcConnectionPool.create(url, user, password);
         FluentJdbc fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
         query = fluent.query();
-        migrate();
         if (serverPort != null) {
             try {
                 Server.createTcpServer("-tcp", "-tcpAllowOthers", "-tcpPort", serverPort.toString(), "-baseDir", "./data/").start();

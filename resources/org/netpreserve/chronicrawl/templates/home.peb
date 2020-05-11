@@ -73,9 +73,10 @@
                 var img = div.querySelector("img");
                 var newImg = img.cloneNode(true);
                 newImg.src = visit.screenshotDataUrl;
+                newImg.title = visit.url;
                 img.parentNode.replaceChild(newImg, img);
-                div.querySelector(".path").src = visit.path;
-                div.querySelector(".host").src = visit.host;
+                div.querySelector(".path").textContent = visit.path;
+                div.querySelector(".host").textContent = visit.host;
                 div.querySelector("a").href = "visit?id=" + visit.visitId;
                 lastId = visit.visitId;
             }

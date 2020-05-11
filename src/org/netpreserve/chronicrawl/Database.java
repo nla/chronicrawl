@@ -133,7 +133,7 @@ public class Database implements AutoCloseable {
         }
 
         public Location next(long originId) {
-            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 1")
+            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, depth ASC, next_visit ASC LIMIT 1")
                     .params(Instant.now(), originId)
                     .firstResult(mapper)
                     .orElse(null);
@@ -144,13 +144,13 @@ public class Database implements AutoCloseable {
                     "LEFT JOIN origin o ON o.id = l.origin_id " +
                     "WHERE l.next_visit <= ? " +
                     "AND o.crawl_policy = 'CONTINUOUS' " +
-                    "ORDER BY l.priority ASC, l.sitemap_priority DESC, l.next_visit ASC LIMIT 100")
+                    "ORDER BY l.priority ASC, l.sitemap_priority DESC, depth ASC, l.next_visit ASC LIMIT 100")
                     .params(Instant.now())
                     .listResult(mapper);
         }
 
         public List<Location> peekQueue(long originId) {
-            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, next_visit ASC LIMIT 100")
+            return query.select("SELECT " + fields + " FROM location WHERE next_visit <= ? AND origin_id = ? ORDER BY priority ASC, sitemap_priority DESC, depth ASC, next_visit ASC LIMIT 100")
                     .params(Instant.now(), originId)
                     .listResult(mapper);
         }

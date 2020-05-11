@@ -95,9 +95,9 @@ public class Url implements Comparable<Url> {
         return parsed.getHost() + parsed.getColonBeforePort() + parsed.getPort();
     }
 
-    public Socket connect() throws IOException {
+    public Socket connect(InetAddress bindAddress) throws IOException {
         if ("http".equalsIgnoreCase(scheme())) {
-            return new Socket(host(), port() < 0 ? 80 : port());
+            return new Socket(host(), port() < 0 ? 80 : port(), bindAddress, 0);
         } else if ("https".equalsIgnoreCase(scheme())) {
             return SSLSocketFactory.getDefault().createSocket(host(), port() < 0 ? 443 : port());
         } else {

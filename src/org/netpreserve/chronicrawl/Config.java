@@ -7,6 +7,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,6 +38,11 @@ public class Config {
      * Database password
      */
     String dbPassword = "";
+
+    /**
+     * Bind address for the crawler (not the UI).
+     */
+    InetAddress bindAddress;
 
     /**
      * Listening port of the web user interface
@@ -122,6 +129,9 @@ public class Config {
      */
     String pywb;
 
+    /**
+     * Port to run Pywb on.
+     */
     int pywbPort = 8081;
 
     /**
@@ -191,6 +201,12 @@ public class Config {
                 field.setLong(this, Long.parseLong(value));
             } else if (field.getType().equals(DateTimeFormatter.class)) {
                 field.set(this, DateTimeFormatter.ofPattern(value).withZone(ZoneOffset.UTC));
+            } else if (field.getType().equals(InetAddress.class)) {
+                try {
+                    field.set(this, InetAddress.getByName(value));
+                } catch (UnknownHostException e) {
+                    throw new RuntimeException("Unable to resolve " + value, e);
+                }
             } else {
                 throw new UnsupportedOperationException("Type conversion not implemented for " + field.getType());
             }

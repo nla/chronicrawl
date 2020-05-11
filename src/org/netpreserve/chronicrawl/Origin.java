@@ -25,6 +25,6 @@ public class Origin {
     }
 
     public String robotsTxtString() {
-        return new String(robotsTxt, StandardCharsets.UTF_8);
+        return robotsTxt == null ? null : new String(robotsTxt, StandardCharsets.UTF_8);
     }
 }

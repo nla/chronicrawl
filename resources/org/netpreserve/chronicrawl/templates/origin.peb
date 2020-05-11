@@ -22,11 +22,14 @@
     </table>
 </form>
 
+{% if origin.robotsTxt is not null %}
 <p>
-<details>
-    <summary>robots.txt</summary>
-    <pre>{{ origin.robotsTxtString }}</pre>
-</details>
+    <details>
+        <summary>robots.txt</summary>
+        <pre>{{ origin.robotsTxtString }}</pre>
+    </details>
+</p>
+{% endif %}
 <p>
 <details>
     <summary>URL queue</summary>

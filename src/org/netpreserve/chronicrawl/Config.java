@@ -40,6 +40,11 @@ public class Config {
     String dbPassword = "";
 
     /**
+     * Runs H2 in TCP server mode on the given port.
+     */
+    Integer dbServerPort;
+
+    /**
      * Bind address for the crawler (not the UI).
      */
     InetAddress bindAddress;

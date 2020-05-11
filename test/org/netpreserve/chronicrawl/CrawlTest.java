@@ -21,7 +21,7 @@ public class CrawlTest {
 
     @Test
     public void test() throws IOException {
-        Database db = new Database("jdbc:h2:file:./data/testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE", "sa", "");
+        Database db = new Database("jdbc:h2:file:./data/testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE", "sa", "", null);
         db.init();
         Config config = new Config();
         config.maxDelayMillis = 0;

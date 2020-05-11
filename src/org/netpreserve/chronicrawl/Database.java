@@ -8,6 +8,7 @@ import org.codejargon.fluentjdbc.api.query.Query;
 import org.codejargon.fluentjdbc.api.query.UpdateResult;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.h2.tools.RunScript;
+import org.h2.tools.Server;
 import org.netpreserve.jwarc.WarcDigest;
 
 import java.io.InputStreamReader;
@@ -34,13 +35,20 @@ public class Database implements AutoCloseable {
     public final WarcDAO warcs = new WarcDAO();
 
     Database() {
-        this("jdbc:h2:file:./data/db;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE", "sa", "");
+        this("jdbc:h2:file:./data/db;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE", "sa", "", null);
     }
 
-    Database(String url, String user, String password) {
+    Database(String url, String user, String password, Integer serverPort) {
         jdbcPool = JdbcConnectionPool.create(url, user, password);
         FluentJdbc fluent = new FluentJdbcBuilder().connectionProvider(jdbcPool).build();
         query = fluent.query();
+        if (serverPort != null) {
+            try {
+                Server.createTcpServer("-tcp", "-tcpAllowOthers", "-tcpPort", serverPort.toString(), "-baseDir", "./data/").start();
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     void init() {

@@ -7,8 +7,8 @@
 <p>
 
 <table>
-   <tr><th>Location:</th><td><a href="location?id={{ analysis.url.id }}">{{ analysis.url }}</a></td></tr>
-   <tr><th>Date:</th><td>{{ analysis.date }}</td></tr>
+   <tr><th>Location:</th><td><a href="location?id={{ analysis.location.url.id }}">{{ analysis.location.url }}</a></td></tr>
+   <tr><th>Visit date:</th><td>{{ analysis.visitDate }}</td></tr>
    <tr><th>Title:</th><td>{{ analysis.title }}</td></tr>
 </table>
 

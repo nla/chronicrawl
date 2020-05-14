@@ -75,7 +75,11 @@ public class AnalyserBrowser {
                     }
                 }
             }
-            crawl.storage.readResponse(subvisit, request::fulfill);
+            if (subvisit.status < 0) {
+                request.fail("Failed");
+            } else {
+                crawl.storage.readResponse(subvisit, request::fulfill);
+            }
         } catch (IOException e) {
             request.fail("Failed");
         }

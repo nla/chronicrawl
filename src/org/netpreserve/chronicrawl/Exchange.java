@@ -57,7 +57,6 @@ public class Exchange implements Closeable {
     int fetchStatus;
     UUID responseId;
     byte[] digest;
-    long bodyLength;
     private Analysis analysis;
     Visit prevVisit;
     URI prevResponseId;
@@ -149,7 +148,7 @@ public class Exchange implements Closeable {
                 bodyLength += n;
             }
             this.digest = digest.digest();
-            this.bodyLength = bodyLength;
+            this.contentLength = bodyLength;
         } catch (NoSuchAlgorithmException e) {
             throw new IOException("Calculating " + crawl.config.warcDigestAlgorithm + " digest", e);
         }
@@ -220,7 +219,6 @@ public class Exchange implements Closeable {
     private void finish() {
         if (httpResponse != null) {
             contentType = httpResponse.contentType().base().toString();
-            contentLength = httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(0L);
         }
         crawl.db.query.transaction().inNoResult(() -> {
             crawl.db.origins.updateVisit(origin.id, date, date.plusMillis(calcDelayMillis()));

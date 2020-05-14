@@ -345,7 +345,7 @@ public class Database implements AutoCloseable {
             url = rs.getString("url");
             contentType = rs.getString("content_type");
             status = rs.getInt("status");
-            payloadDigest = rs.getBytes("response_payload_digest");
+            payloadDigest = Arrays.copyOf(rs.getBytes("response_payload_digest"), 20); // XXX: pad out to match sha1 length
             length = rs.getLong("response_length");
             position = rs.getLong("response_position");
             warcId = getUUID(rs, "warc_id");

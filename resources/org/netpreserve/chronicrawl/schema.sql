@@ -54,6 +54,9 @@ CREATE TABLE location
     FOREIGN KEY (location_type_id) REFERENCES location_type
 );
 
+create index location_next_visit_index
+    on location (origin_id, next_visit, path_id);
+
 CREATE TABLE sitemap_entry
 (
     origin_id         BIGINT NOT NULL,
@@ -63,6 +66,7 @@ CREATE TABLE sitemap_entry
     changefreq        VARCHAR(16),
     priority          FLOAT,
     lastmod           VARCHAR(40),
+    PRIMARY KEY (origin_id, path_id, sitemap_origin_id, sitemap_path_id),
     FOREIGN KEY (origin_id, path_id) REFERENCES location,
     FOREIGN KEY (sitemap_origin_id, sitemap_path_id) REFERENCES location
 );

@@ -12,6 +12,7 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -46,6 +47,7 @@ public class Storage implements Closeable {
         Path warcPath = Paths.get(config.warcFilename
                 .replace("{TIMESTAMP}", config.warcTimestampFormat.format(Instant.now()))
                 .replace("{SEQNO}", String.format("%05d", nextSerial())));
+        Files.createDirectories(warcPath.getParent());
         warcWriter = new WarcWriter(FileChannel.open(warcPath, WRITE, CREATE_NEW));
         warcId = UuidCreator.getTimeOrdered();
         Instant date = Instant.now();

@@ -31,4 +31,20 @@ public class Util {
     static String makeJpegDataUrl(byte[] data) {
         return data == null ? null : "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(data);
     }
+
+    static String encodeId(long x) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(toBytes(x));
+    }
+
+    static byte[] toBytes(long x) {
+        return new byte[]{
+                (byte) x,
+                (byte) (x >> 8),
+                (byte) (x >> 16),
+                (byte) (x >> 24),
+                (byte) (x >> 32),
+                (byte) (x >> 40),
+                (byte) (x >> 48),
+                (byte) (x >> 56)};
+    }
 }

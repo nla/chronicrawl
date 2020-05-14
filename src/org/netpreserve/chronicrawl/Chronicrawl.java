@@ -42,9 +42,8 @@ public class Chronicrawl {
         }
         config.load(System.getenv());
         config.load(System.getProperties());
-        Database db = new Database(config.dbUrl, config.dbUser, config.dbPassword, config.dbServerPort);
-        if (initDb) db.init();
-        db.migrate();
+        Database db = new Database(config.dbUrl, config.dbUser, config.dbPassword);
+        if (initDb || !db.schemaExists()) db.init();
         try (Crawl crawl = new Crawl(config, db);
              Webapp webapp = new Webapp(crawl, crawl.config.uiPort)) {
             // finally block sometimes doesn't get called so use a shutdown hook too

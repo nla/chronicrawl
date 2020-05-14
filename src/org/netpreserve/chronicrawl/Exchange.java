@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
@@ -23,11 +24,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.*;
 
 import static java.nio.file.StandardOpenOption.*;
-import static java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME;
 
 public class Exchange implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
@@ -37,7 +36,6 @@ public class Exchange implements Closeable {
             "ugprade-insecure-requests", "accept-encoding"
     );
 
-    final UUID id = UuidCreator.getTimeOrdered();
     final Crawl crawl;
     final Origin origin;
     final Location location;
@@ -47,7 +45,12 @@ public class Exchange implements Closeable {
     final Url url;
     final String method;
     final Map<String, String> extraHeaders;
-    public UUID revisitOf;
+    public Visit revisitOf;
+    public UUID warcId;
+    public long requestPosition;
+    public long requestLength;
+    public long responsePosition;
+    public long responseLength;
     HttpRequest httpRequest;
     HttpResponse httpResponse;
     InetAddress ip;
@@ -56,6 +59,10 @@ public class Exchange implements Closeable {
     byte[] digest;
     long bodyLength;
     private Analysis analysis;
+    Visit prevVisit;
+    URI prevResponseId;
+    long contentLength;
+    String contentType;
 
     public Exchange(Crawl crawl, Origin origin, Location location, String method, Map<String, String> extraHeaders) throws IOException {
         this.crawl = crawl;
@@ -66,15 +73,15 @@ public class Exchange implements Closeable {
         Path tempFile = Files.createTempFile("chronicrawl", ".tmp");
         bufferFile = FileChannel.open(tempFile, READ, WRITE, DELETE_ON_CLOSE, TRUNCATE_EXISTING);
         url = location.url;
-        this.via = location.via == null ? null : crawl.db.locations.find(location.via);
+        this.via = location.viaPathId == null ? null : crawl.db.locations.find(location.viaOriginId, location.viaPathId);
         crawl.exchanges.add(this);
     }
 
     public void run() throws IOException {
         if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url.toString())) {
             fetch();
-            finish();
             crawl.storage.save(this);
+            finish();
         } else {
             fetchStatus = Status.ROBOTS_DISALLOWED;
         }
@@ -91,11 +98,21 @@ public class Exchange implements Closeable {
                 .addHeader("User-Agent", crawl.config.userAgent)
                 .addHeader("Connection", "close")
                 .version(MessageVersion.HTTP_1_0);
-        if (crawl.config.dedupeServer && location.etag != null) {
-            builder.addHeader("If-None-Match", location.etag);
-        }
-        if (crawl.config.dedupeServer && location.lastModified != null) {
-            builder.addHeader("If-Modified-Since", RFC_1123_DATE_TIME.withZone(ZoneOffset.UTC).format(location.lastModified));
+        if (crawl.config.dedupeServer) {
+            prevVisit = crawl.db.visits.lastSuccessful(location.originId, location.pathId);
+            if (prevVisit != null) {
+                try {
+                    crawl.storage.readResponse(prevVisit, response -> {
+                        prevResponseId = response.id();
+                        var headers = response.http().headers();
+                        headers.first("ETag").ifPresent(s -> builder.addHeader("If-None-Match", s));
+                        headers.first("Last-Modified").ifPresent(s -> builder.addHeader("If-Modified-Since", s));
+                    });
+                } catch (IOException e) {
+                    log.warn("Failed to read back last visit", e);
+                    prevVisit = null;
+                }
+            }
         }
         if (via != null) {
             builder.addHeader("Referer", via.url.toString());
@@ -162,8 +179,9 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() throws IOException {
+        Visit visit = crawl.db.visits.find(location.originId, location.pathId, date);
         this.analysis = new Analysis(location, date);
-        crawl.storage.readResponse(responseId, response -> new AnalyserClassic(analysis).parseHtml(response));
+        crawl.storage.readResponse(visit, response -> new AnalyserClassic(analysis).parseHtml(response));
         if (analysis.hasScript) {
             new AnalyserBrowser(crawl, analysis, true);
         }
@@ -173,7 +191,7 @@ public class Exchange implements Closeable {
 
         if (analysis.screenshot != null) {
             crawl.db.screenshotCache.expire(100);
-            crawl.db.screenshotCache.insert(id, analysis.screenshot);
+            crawl.db.screenshotCache.insert(url, date, analysis.screenshot);
         }
     }
 
@@ -193,27 +211,23 @@ public class Exchange implements Closeable {
 
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
-            Url url = location.url.resolve(entry.loc);
-            crawl.enqueue(location, date, url, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
-            crawl.db.locations.updateSitemapData(url.id(), entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
+            Url entryUrl = location.url.resolve(entry.loc);
+            crawl.enqueue(location, date, entryUrl, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
+            crawl.db.sitemapEntries.insertOrReplace(this.url, entryUrl, entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
     }
 
     private void finish() {
-        String contentType = httpResponse == null ? null : httpResponse.contentType().base().toString();
-        Long contentLength = httpResponse == null ? null : httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(null);
-        crawl.db.origins.updateVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
-
-        if (Status.isSuccess(fetchStatus)) {
-            String etag = httpResponse.headers().first("ETag").orElse(null);
-            Instant lastModified = httpResponse.headers().first("Last-Modified")
-                    .map(s -> RFC_1123_DATE_TIME.parse(s, Instant::from)).orElse(null);
-            crawl.db.locations.updateEtagData(location.url.id(), etag, lastModified, responseId, date);
+        if (httpResponse != null) {
+            contentType = httpResponse.contentType().base().toString();
+            contentLength = httpResponse.headers().sole("Content-Length").map(Long::parseLong).orElse(0L);
         }
-
-        crawl.db.locations.updateVisitData(location.url.id(), date, date.plus(Duration.ofDays(1)));
-        crawl.db.visits.insert(id, httpRequest.method(), url.id(), date, fetchStatus, contentLength, contentType);
-        System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength != null ? contentLength : "-",
+        crawl.db.query.transaction().inNoResult(() -> {
+            crawl.db.origins.updateVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
+            crawl.db.locations.updateVisitData(location.url.originId(), location.url.pathId(), date, date.plus(Duration.ofDays(1)));
+            crawl.db.visits.insert(this);
+        });
+        System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength,
                 location.url, location.type, via != null ? via.url : "-", contentType != null ? contentType : "-");
         System.out.flush();
 

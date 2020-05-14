@@ -20,19 +20,32 @@ public class CrawlTest {
     }
 
     @Test
-    public void test() throws IOException {
-        Database db = new Database("jdbc:h2:file:./data/testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE", "sa", "", null);
-        db.init();
-        Config config = new Config();
-        config.maxDelayMillis = 0;
-        try (Crawl crawl = new Crawl(config, db)) {
-            crawl.addSeed(testServer.url() + "/");
-            crawl.step();
-            crawl.step();
-            crawl.step();
-            crawl.step();
-            crawl.step();
-            crawl.step();
+    public void testSqlite() throws IOException {
+        test("jdbc:sqlite::memory:");
+    }
+
+    // we test against h2 as well to try to make sure we're keeping the sql reasonably portable
+    // and to pick up any errors that sqlite's weak typing wouldn't hit
+    @Test
+    public void testH2() throws IOException {
+        test("jdbc:h2:mem:test");
+    }
+
+    private void test(String dbUrl) throws IOException {
+        try (Database db = new Database(dbUrl, "sa", "")) {
+            db.init();
+            Config config = new Config();
+            config.maxDelayMillis = 0;
+            try (Crawl crawl = new Crawl(config, db)) {
+                crawl.addSeed(testServer.url() + "/");
+                crawl.paused.set(false);
+                crawl.step();
+                crawl.step();
+                crawl.step();
+                crawl.step();
+                crawl.step();
+                crawl.step();
+            }
         }
     }
 }

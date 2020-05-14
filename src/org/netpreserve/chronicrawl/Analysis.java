@@ -19,9 +19,9 @@ public class Analysis {
         this.visitDate = visitDate;
     }
 
-    public void addResource(String method, Url url, ResourceType type, UUID responseId, String analyser) {
+    public void addResource(String method, Url url, ResourceType type, Visit visit, String analyser) {
         String ssurt = url.ssurt();
-        var resource = new Resource(method, url, type, responseId, analyser);
+        var resource = new Resource(method, url, type, visit, analyser);
         var existing = resourceMap.putIfAbsent(ssurt, resource);
         if (existing != null) existing.analysers.add(analyser);
     }
@@ -52,14 +52,14 @@ public class Analysis {
         public final String method;
         public final Url url;
         public final ResourceType type;
-        public final UUID responseId;
         public final Set<String> analysers = new ConcurrentSkipListSet<>();
+        public final Visit visit;
 
-        public Resource(String method, Url url, ResourceType type, UUID responseId, String analyser) {
+        public Resource(String method, Url url, ResourceType type, Visit visit, String analyser) {
             this.method = method;
             this.url = url;
             this.type = type;
-            this.responseId = responseId;
+            this.visit = visit;
             analysers.add(analyser);
         }
     }

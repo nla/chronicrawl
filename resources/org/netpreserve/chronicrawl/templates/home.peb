@@ -54,7 +54,7 @@
 <div class="screenshot-gimmick">
     {% for screenshot in screenshots %}
         <div>
-            <a href="visit?id={{ screenshot.visitId }}" title="{{ screenshot.url }}"><img src="{{ screenshot.screenshotDataUrl }}"></a><br>
+            <a href="visit?o={{ screenshot.url.originId }}&p={{ screenshot.url.pathId }}&d={{ screenshot.date.toEpochMilli }}" title="{{ screenshot.url }}"><img src="{{ screenshot.screenshotDataUrl }}"></a><br>
             <span class="host">{{ screenshot.url.host.replaceFirst("^www\.", "") }}</span><span class="path">{{ screenshot.url.path }}</span>
         </div>
     {% endfor %}
@@ -62,25 +62,25 @@
 
 <script>
     (function() {
-        let lastId = "{{ (screenshots | first).visitId }}";
-        let visits = [];
+        let after = "{{ (screenshots | first).date.toEpochMillis | default("0") }}";
+        let screenshots = [];
 
         function displayScreenshot() {
-            let visit = visits.pop();
-            if (visit) {
+            let ss = screenshots.pop();
+            if (ss) {
                 var divs = document.querySelectorAll("div.screenshot-gimmick > div");
                 var div = divs[Math.floor(Math.random() * divs.length)];
                 var img = div.querySelector("img");
                 var newImg = img.cloneNode(true);
-                newImg.src = visit.screenshotDataUrl;
-                newImg.title = visit.url;
+                newImg.src = ss.screenshotDataUrl;
+                newImg.title = ss.url;
                 img.parentNode.replaceChild(newImg, img);
-                div.querySelector(".path").textContent = visit.path;
-                div.querySelector(".host").textContent = visit.host;
-                div.querySelector("a").href = "visit?id=" + visit.visitId;
-                lastId = visit.visitId;
+                div.querySelector(".path").textContent = ss.path;
+                div.querySelector(".host").textContent = ss.host;
+                div.querySelector("a").href = "visit?o=" + ss.originId + "&p=" + ss.pathId + "&d=" + ss.date;
+                after = ss.date;
             }
-            if (visits.length > 0) {
+            if (screenshots.length > 0) {
                 setTimeout(displayScreenshot, 1000);
             } else {
                 loadScreenshots();
@@ -88,11 +88,11 @@
         }
 
         function loadScreenshots() {
-            fetch("recent.json?after=" + lastId)
+            fetch("recent.json?after=" + after)
                     .then(response => response.json())
                     .then(function (data) {
-                        visits = data;
-                        if (visits.length == 0) {
+                        screenshots = data;
+                        if (screenshots.length == 0) {
                             setTimeout(loadScreenshots, 2000);
                         } else {
                             setTimeout(displayScreenshot, 1000);

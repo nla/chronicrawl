@@ -3,11 +3,11 @@
 {% block content %}
 <h2>Browser Analysis</h2>
 
-<img src="{{ analysis.screenshotDataUrl }}" width="400px" onclick="if (this.width === this.naturalWidth) { this.width = 400; } else { this.width = this.naturalWidth; }" style="cursor: pointer">
+<img src="{{ analysis.screenshotDataUrl }}" width=400px onclick="if (this.width === this.naturalWidth) { this.width = 400; } else { this.width = this.naturalWidth; }" style="cursor: pointer">
 <p>
 
 <table>
-   <tr><th>Location:</th><td><a href="location?id={{ analysis.location.url.id }}">{{ analysis.location.url }}</a></td></tr>
+   <tr><th>Location:</th><td><a href="{{ analysis.location.href }}">{{ analysis.location.url }}</a></td></tr>
    <tr><th>Visit date:</th><td>{{ analysis.visitDate }}</td></tr>
    <tr><th>Title:</th><td>{{ analysis.title }}</td></tr>
 </table>
@@ -20,11 +20,11 @@
    {% for resource in analysis.resources %}
       <tr>
          <td>{{ resource.method }}</td>
-         <td style="word-break:break-all;">{% if resource.responseId is not null %}<a
-                 href="location?id={{ resource.url.id }}">{{ resource.url }}</a>{% else %}{{ resource.url }}{% endif %}
+         <td style="word-break:break-all;">{% if resource.visit is not null %}<a
+                 href="{{ resource.visit.href }}">{{ resource.url }}</a>{% else %}{{ resource.url }}{% endif %}
          </td>
          <td>{{ resource.type }}</td>
-         <td style="white-space: nowrap">{{ resource.responseId }}</td>
+         <td style="white-space: nowrap">{{ resource.visit.date | default("")}}</td>
          <td style="white-space: nowrap">{{ resource.analysers }}</td>
       </tr>
    {% endfor %}
@@ -37,7 +37,7 @@
       {% for link in analysis.links %}
          <tr>
             <td style="word-break:break-all;"><a
-                    href="location?id={{ link.id }}">{{ link }}</a>
+                    href="location?o={{ link.originId }}&p={{ link.pathId }}">{{ link }}</a>
             </td>
          </tr>
       {% endfor %}

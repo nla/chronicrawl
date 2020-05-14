@@ -6,7 +6,7 @@
 <table class="overview">
     <tr>
         <th>Location:</th>
-        <td>{{ visit.method }} <a href="location?id={{ visit.locationId }}">{{ location.url }}</a></td>
+        <td>{{ visit.method }} <a href="location?o={{ visit.originId }}&p={{ visit.pathId }}">{{ location.url }}</a></td>
     </tr>
     <tr>
         <th>Date:</th>
@@ -20,7 +20,7 @@
 
 <nav>
     {% if replayUrl is not null %}<a href="{{ replayUrl }}" class="button">Replay</a>{% endif %}
-    <a href="analyse?visitId={{ visit.id }}" class="button">Analyse</a>
+    <a href="analyse?o={{ visit.originId }}&p={{ visit.pathId }}&d={{ visit.date.toEpochMilli }}" class="button">Analyse</a>
 </nav>
 
 {% endblock %}

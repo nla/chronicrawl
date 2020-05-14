@@ -1,3 +1,7 @@
+{# @pebvariable name="queues" type="java.util.List<org.netpreserve.chronicrawl.Webapp.QueueInfo>" #}
+{# @pebvariable name="queue" type="org.netpreserve.chronicrawl.Webapp.QueueInfo" #}
+{# @pebvariable name="location" type="org.netpreserve.chronicrawl.Location" #}
+
 {% extends "./layout.peb" %}
 
 {% block title %}Crawl Queue{% endblock %}
@@ -7,18 +11,26 @@
     table tr td.date {
         color: gray;
     }
+    table {
+        margin-left: 32px;
+    }
 </style>
 <h2>Crawl Queue</h2>
 <p>
 
-{% if locations is not empty %}
-<table>
-{% for location in locations %}
-    <tr>
-        <td>{{ location.type }}</td>
-        <td class="url"><a href="location?id={{ location.url.id }}">{{ location.url }}</a></td>
-    </tr>
+{% for queue in queues %}
+    <details c>
+        <summary>Origin {{ queue.origin.name }}</summary>
+        <table>
+            {% for location in queue.locations %}
+                <tr>
+                    <td class="url"><a href="{{ location.href }}">{{ location.url.pathref }}</a></td>
+                    <td>{{ location.type }}</td>
+                </tr>
+            {% endfor %}
+            <tr><td><a href="{{ queue.origin.href }}">...</a></td></tr>
+        </table>
+    </details>
 {% endfor %}
-</table>
-{% endif %}
+
 {% endblock %}

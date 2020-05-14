@@ -31,13 +31,13 @@
 </p>
 {% endif %}
 <p>
-<details>
+<details id=queue>
     <summary>URL queue</summary>
     <table>
     {% for location in queue %}
         <tr>
             <td>{{ location.type }}</td>
-            <td><a href="location?id={{ location.url.id }}">{{ location.url }}</a></td>
+            <td><a href="{{ location.href }}">{{ location.url }}</a></td>
         </tr>
     {% endfor %}
     </table>

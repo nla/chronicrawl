@@ -5,26 +5,21 @@
 <table class="overview">
     <tr><th>URL:</th><td><a href="{{ location.url }}">{{ location.url }}</a></td></tr>
     <tr><th>Type:</th><td>{{ location.type }}</td></tr>
-    {% if via is not null %}<tr><th>Via:</th><td><a href="location?id={{ location.via }}">{{ via.url }}</a> (depth {{ location.depth }})</td></tr>{% endif %}
+    {% if via is not null %}<tr><th>Via:</th><td><a href="location?o={{ via.url.originId }}&p={{ via.url.pathId }}">{{ via.url }}</a> (depth {{ location.depth }})</td></tr>{% endif %}
     <tr><th>Origin</th><td><a href="origin?id={{ location.url.originId }}">{{ location.url.origin }}</a></td></tr>
-    <tr><th>Etag:</th><td>{{ location.etag }}</td></tr>
-    <tr><th>Last-Modified:</th><td>{{ location.lastModified }}</td></tr>
     <tr><th>Last visit:</th><td>{{ location.lastVisit | default("") }}</td></tr>
     <tr><th>Next visit:</th><td>{{ location.nextVisit | default("") }}</td></tr>
-    <tr><th>Sitemap changefreq:</th><td>{{ location.sitemapChangefreq | default("") }}</td></tr>
-    <tr><th>Sitemap priority:</th><td>{{ location.sitemapPriority | default("") }}</td></tr>
-    <tr><th>Sitemap last-modified:</th><td>{{ location.sitemapLastmod | default("") }}</td></tr>
 </table>
 
 <h3>Visits</h3>
 <table>
     {% for visit in visits %}
         <tr>
-            <td><a href="visit?id={{ visit.id }}">{{ visit.date }}</a> </td>
+            <td><a href="{{ visit.href }}">{{ visit.date }}</a> </td>
             <td>{{ visit.method }}</td>
             <td>{{ visit.status }}</td>
-            <td>{{ visit.content_type }}</td>
-            <td>{{ visit.content_length }}</td>
+            <td>{{ visit.contentType }}</td>
+            <td>{{ visit.contentLength }}</td>
         </tr>
     {% endfor %}
 </table>

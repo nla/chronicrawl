@@ -76,13 +76,25 @@ public class Webapp extends NanoHTTPD implements Closeable {
         } catch (ResponseException e) {
             response = newFixedLengthResponse(e.getStatus(), NanoHTTPD.MIME_PLAINTEXT, e.getMessage());
         } catch (Exception e) {
+            log.error(request.getUri(), e);
             StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
-            log.error(request.getUri(), e);
-            response = newFixedLengthResponse(INTERNAL_ERROR, "text/plain", e.getMessage() + "\n\n" + sw.toString());
+            String stackTrace = html(sw.toString())
+                    .replaceAll("(at .*)", "<span class=at>$1</span>")
+                    .replaceAll("(at org\\.netpreserve\\..*)", "<span class=our>$1</span>");
+
+            response = newFixedLengthResponse(INTERNAL_ERROR, "text/html",
+                    "<!doctype html><style>pre { white-space: pre-wrap; }" +
+                            ".err { color: #000; }" +
+                            ".at { color: #444; }" +
+                            ".our { color: #050; }</style>\n<pre>" +
+                            "<span class=err>" + html(e.getMessage()) + "</span>\n\n" + stackTrace + "</pre>");
         }
         log.info(request.getMethod() + " " + request.getUri() + (request.getQueryParameterString() == null ? "" : "?" + request.getQueryParameterString()) + " " + response.getStatus());
         return response;
+    }
+    private static String html(String s) {
+        return s == null ? null : s.replace("<", "&lt;").replace("&", "&amp;");
     }
 
     static class Session {
@@ -127,14 +139,16 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /":
                     requireRole("admin");
                     return render(View.home, "paused", crawl.paused.get(),
-                            "screenshots", crawl.db.screenshotCache.getN(12, ""));
+                            "screenshots", crawl.db.screenshotCache.getN(12, 0));
                 case "GET /analyse": {
                     requireRole("admin");
-                    UUID visitId = UUID.fromString(param("visitId"));
-                    var visit = db.visits.find(visitId);
-                    var location = db.locations.find(visit.locationId);
+                    long originId = paramLong("o");
+                    long pathId = paramLong("p");
+                    Instant date = Instant.ofEpochMilli(paramLong("d"));
+                    var visit = db.visits.find(originId, pathId, date);
+                    var location = db.locations.find(originId, pathId);
                     var analysis = new Analysis(location, visit.date);
-                    crawl.storage.readResponseForVisit(visitId, response -> new AnalyserClassic(analysis)
+                    crawl.storage.readResponse(visit, response -> new AnalyserClassic(analysis)
                             .parseHtml(response));
                     if (analysis.hasScript) {
                         new AnalyserBrowser(crawl, analysis, request.getParameters().containsKey("recordMode"));
@@ -145,9 +159,9 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     requireRole("admin", "pywb");
                     Url url = new Url(param("url"));
                     var lines = new ArrayList<Database.CdxLine>();
-                    lines.addAll(db.records.listResponsesByLocationId(url.id()));
+                    lines.addAll(db.visits.asCdxLines(url.originId(), url.pathId()));
                     if (url.scheme().equals("http")) {
-                        lines.addAll(db.records.listResponsesByLocationId(url.withScheme("https").id()));
+                        lines.addAll(db.visits.asCdxLines(url.originId(), url.pathId()));
                     }
                     StringBuilder sb = new StringBuilder();
                     for (var line : lines) {
@@ -156,13 +170,30 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     }
                     return newFixedLengthResponse(sb.toString());
                 }
+                case "GET /debug": {
+                    return render(View.debug);
+                }
+                case "POST /debug/load-dummy-data": {
+                    int origins = 100;
+                    int locations = 1000;
+                    long start = System.currentTimeMillis();
+                    db.query.transaction().inNoResult(() -> {
+                        for (int i = 0; i < origins; i++) {
+                            String origin = "http://" + UUID.randomUUID().toString() + ".localhost";
+                            db.origins.tryInsert(Url.hash(origin), origin, Instant.now(), CrawlPolicy.CONTINUOUS);
+                            for (int j = 0; j < locations; j++) {
+                                db.locations.tryInsert(new Url(origin + "/" + UUID.randomUUID()), Location.Type.PAGE, null, 0, Instant.now(), 0);
+                            }
+                        }
+                    });
+                    return seeOther(contextPath + "/debug", "Loaded " + origins + " random origins each with " + locations + " locations in " + (System.currentTimeMillis() - start) + " ms");
+                }
                 case "GET /location": {
                     requireRole("admin");
-                    Long locationId = paramLong("id");
-                    Location location = db.locations.find(locationId);
+                    Location location = db.locations.find(paramLong("o"), paramLong("p"));
                     return render(View.location, "location", location,
-                            "via", location.via == null ? null : db.locations.find(location.via),
-                            "visits", db.visits.findByLocationId(locationId));
+                            "via", location.viaPathId == null ? null : db.locations.find(location.viaOriginId, location.viaPathId),
+                            "visits", db.visits.list(location.originId, location.pathId));
                 }
                 case "POST /location/add": {
                     requireRole("admin");
@@ -185,7 +216,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     }
                     Origin origin = found(db.origins.find(id));
                     return render(View.origin, "origin", origin,
-                            "queue", db.locations.peekQueue(id),
+                            "queue", db.locations.peek(id, 50),
                             "allCrawlPolicies", CrawlPolicy.values());
                 }
                 case "POST /origin/update": {
@@ -198,7 +229,11 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 }
                 case "GET /queue": {
                     requireRole("admin");
-                    return render(View.queue, "locations", db.locations.peekQueue());
+                    var queues = new ArrayList<QueueInfo>();
+                    for (var origin : db.origins.peek(25)) {
+                        queues.add(new QueueInfo(origin, db.locations.peek(origin.id, 10)));
+                    }
+                    return render(View.queue, "queues", queues);
                 }
                 case "POST /pause":
                     requireRole("admin");
@@ -210,9 +245,11 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return seeOther(contextPath + "/", "Unpaused.");
                 case "GET /recent.json": {
                     var json = JsonWriter.string().array();
-                    for (var screenshot : db.screenshotCache.getN(5, param("after", ""))) {
+                    for (var screenshot : db.screenshotCache.getN(5, paramLong("after", 0L))) {
                         json.object()
-                                .value("visitId", screenshot.visitId.toString())
+                                .value("originId", Long.toString(screenshot.originId))
+                                .value("pathId", Long.toString(screenshot.pathId))
+                                .value("date", Long.toString(screenshot.date.toEpochMilli()))
                                 .value("screenshotDataUrl", screenshot.screenshotDataUrl())
                                 .value("url", screenshot.url.toString())
                                 .value("host", screenshot.url.host().replaceFirst("^www\\.", ""))
@@ -240,22 +277,19 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /search": {
                     requireRole("admin");
                     String q = param("q").strip();
-                    if (q.matches("[0-9-]+") && db.locations.find(Long.parseLong(q)) != null)
-                        return seeOther("location?id=" + q);
                     Url url = new Url(q);
-                    if (db.locations.find(url.id()) != null) return seeOther("location?id=" + url.id());
+                    Location location = db.locations.find(url.originId(), url.pathId());
+                    if (location != null) return seeOther(location.href());
                     if (db.origins.find(url.originId()) != null) return seeOther("origin?id=" + url.originId());
                     return render(View.searchNoResults, "url", url);
                 }
                 case "GET /visit":
                     requireRole("admin");
-                    UUID visitId = UUID.fromString(param("id"));
-                    Visit visit = db.visits.find(visitId);
+                    Visit visit = db.visits.find(paramLong("o"), paramLong("p"), Instant.ofEpochMilli(paramLong("d")));
                     if (visit == null) throw new NotFound();
-                    Location location = db.locations.find(visit.locationId);
+                    Location location = db.locations.find(visit.originId, visit.pathId);
                     return render(View.visit, "visit", visit,
                             "location", location,
-                            "records", db.records.findByVisitId(visitId),
                             "replayUrl", crawl.pywb.replayUrl(location.url, visit.date));
                 default:
                     throw new NotFound();
@@ -420,7 +454,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin, visit, analyse, searchNoResults, queue;
+        home, location, log, origin, visit, analyse, searchNoResults, queue, debug;
 
         private final PebbleTemplate template;
 
@@ -432,5 +466,15 @@ public class Webapp extends NanoHTTPD implements Closeable {
     @Override
     public void close() {
         stop();
+    }
+
+    public static class QueueInfo {
+        public final Origin origin;
+        public final List<Location> locations;
+
+        public QueueInfo(Origin origin, List<Location> locations) {
+            this.origin = origin;
+            this.locations = locations;
+        }
     }
 }

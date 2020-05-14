@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -24,10 +25,6 @@ public class Crawl implements Closeable {
     final AtomicBoolean paused = new AtomicBoolean(true);
     final Pywb pywb;
     final CloseableHttpAsyncClient httpClient;
-
-    public Crawl() throws IOException {
-        this(new Config(), new Database());
-    }
 
     public Crawl(Config config, Database db) throws IOException {
         this.config = config;
@@ -51,8 +48,7 @@ public class Crawl implements Closeable {
         if (db.origins.tryInsert(targetUrl.originId(), targetUrl.origin(), date, CrawlPolicy.TRANSCLUSIONS)) {
 //            db.locations.tryInsert(targetUrl.resolve("/robots.txt"), Location.Type.ROBOTS, targetUrl.id(), date, 1);
         }
-        db.locations.tryInsert(targetUrl, type, via == null ? null : via.url.id(), via == null ? 0 : via.depth + 1, date, priority);
-        db.tryInsertLink(via.url.id(), targetUrl.id());
+        db.locations.tryInsert(targetUrl, type, via.url, via == null ? 0 : via.depth + 1, date, priority);
     }
 
     @Override
@@ -68,16 +64,6 @@ public class Crawl implements Closeable {
         }
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException {
-        try (Crawl crawl = new Crawl()) {
-            crawl.addSeed(args[0]);
-            while (true) {
-                crawl.step();
-                Thread.sleep(1000);
-            }
-        }
-    }
-
     public void step() throws IOException {
         if (paused.get()) {
             try {
@@ -87,8 +73,8 @@ public class Crawl implements Closeable {
             }
             return;
         }
-        Origin origin = db.origins.next();
-        if (origin == null) {
+        List<Origin> origins = db.origins.peek(1);
+        if (origins.isEmpty()) {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -96,6 +82,7 @@ public class Crawl implements Closeable {
             }
             return;
         }
+        Origin origin = origins.get(0);
         Instant now = Instant.now();
         if (origin.nextVisit.isAfter(now)) {
             try {
@@ -105,7 +92,7 @@ public class Crawl implements Closeable {
                 return;
             }
         }
-        Location location = db.locations.next(origin.id);
+        Location location = db.locations.peek(origin.id);
         if (location == null) {
             db.origins.updateVisit(origin.id, Instant.now(), null);
             return;

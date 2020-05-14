@@ -1,41 +1,36 @@
 package org.netpreserve.chronicrawl;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
-import java.util.UUID;
-
-import static java.util.Objects.requireNonNull;
 
 public class Location {
+    public final long originId;
+    public final long pathId;
     public final Url url;
     public final Type type;
-    public final String etag;
-    public final Instant lastModified;
-    public final Long via;
     public final int depth;
-    public final UUID etagResponseId;
-    public final Instant etagDate;
+    public final Long viaOriginId;
+    public final Long viaPathId;
+    public final Instant discovered;
     public final Instant lastVisit;
     public final Instant nextVisit;
-    public final int priority;
-    public final String sitemapChangefreq;
-    public final float sitemapPriority;
-    public final String sitemapLastmod;
 
-    public Location(Url url, Type type, String etag, Instant lastModified, Long via, int depth, UUID etagResponseId, Instant etagDate, Instant lastVisit, Instant nextVisit, int priority, String sitemapChangefreq, float sitemapPriority, String sitemapLastmod) {
-        this.url = requireNonNull(url, "url");
-        this.type = requireNonNull(type, "type");
-        this.etag = etag;
-        this.lastModified = lastModified;
-        this.via = via;
-        this.depth = depth;
-        this.etagResponseId = etagResponseId;
-        this.etagDate = etagDate;
-        this.lastVisit = lastVisit;
-        this.nextVisit = nextVisit;
-        this.priority = priority;
-        this.sitemapChangefreq = sitemapChangefreq;
-        this.sitemapPriority = sitemapPriority;
-        this.sitemapLastmod = sitemapLastmod;
+    public Location(ResultSet rs) throws SQLException {
+        originId = rs.getLong("origin_id");
+        pathId = rs.getLong("path_id");
+        url = new Url(rs.getString("origin") + rs.getString("path"));
+        type = Type.valueOf(rs.getString("location_type"));
+        depth = rs.getInt("depth");
+        viaOriginId = Database.getLongOrNull(rs, "via_origin_id");
+        viaPathId = Database.getLongOrNull(rs, "via_path_id");
+        discovered = Database.getInstant(rs, "discovered");
+        lastVisit = Database.getInstant(rs, "last_visit");
+        nextVisit = Database.getInstant(rs, "next_visit");
+    }
+
+    public String href() {
+        return "location?o=" + originId + "&p=" + pathId;
     }
 
     public enum Type {

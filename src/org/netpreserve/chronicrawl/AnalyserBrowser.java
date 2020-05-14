@@ -49,10 +49,10 @@ public class AnalyserBrowser {
     private void onRequestIntercepted(BrowserRequest request) {
         try {
             Url subUrl = new Url(request.url());
-            UUID lastVisitResponseId = crawl.db.records.lastResponseId(request.method(), subUrl.id(), analysis.visitDate);
+            Visit subvisit = crawl.db.visits.findClosest(subUrl.originId(), subUrl.pathId(), analysis.visitDate, request.method());
             Analysis.ResourceType type = Analysis.ResourceType.valueOf(request.resourceType);
-            analysis.addResource(request.method(), subUrl, type, lastVisitResponseId, "browser");
-            if (lastVisitResponseId == null) {
+            analysis.addResource(request.method(), subUrl, type, subvisit, "browser");
+            if (subvisit == null) {
                 if (!recordMode) {
                     request.fail("InternetDisconnected");
                     return;
@@ -64,17 +64,18 @@ public class AnalyserBrowser {
                     request.fail("AccessDenied");
                     return;
                 }
-                Location location = crawl.db.locations.find(subUrl.id());
+                Location location = crawl.db.locations.find(subUrl.originId(), subUrl.pathId());
+                Objects.requireNonNull(location);
                 try (Exchange subexchange = new Exchange(crawl, origin, location, request.method(), request.headers())) {
                     subexchange.run();
                     if (subexchange.revisitOf != null) {
-                        lastVisitResponseId = subexchange.revisitOf;
+                        subvisit = subexchange.revisitOf;
                     } else {
-                        lastVisitResponseId = subexchange.responseId;
+                        subvisit = crawl.db.visits.find(subUrl.originId(), subUrl.pathId(), subexchange.date);
                     }
                 }
             }
-            crawl.storage.readResponse(lastVisitResponseId, request::fulfill);
+            crawl.storage.readResponse(subvisit, request::fulfill);
         } catch (IOException e) {
             request.fail("Failed");
         }

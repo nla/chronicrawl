@@ -27,7 +27,7 @@ public class Config {
     /**
      * JDBC URL of database
      */
-    String dbUrl = "jdbc:h2:file:./data/db;MODE=MySQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE";
+    String dbUrl = "jdbc:sqlite:data/chronicrawl.sqlite3";
 
     /**
      * Database username
@@ -38,11 +38,6 @@ public class Config {
      * Database password
      */
     String dbPassword = "";
-
-    /**
-     * Runs H2 in TCP server mode on the given port.
-     */
-    Integer dbServerPort;
 
     /**
      * Bind address for the crawler (not the UI).
@@ -162,7 +157,7 @@ public class Config {
     boolean scriptDeterminism = true;
 
     static String version() {
-        InputStream stream = Config.class.getResourceAsStream("/META-INF/maven/org.netpreserve/trickler/pom.properties");
+        InputStream stream = Config.class.getResourceAsStream("/META-INF/maven/org.netpreserve/chronicrawl/pom.properties");
         if (stream != null) {
             try (stream) {
                 Properties properties = new Properties();

@@ -43,8 +43,8 @@ public class Url implements Comparable<Url> {
         return parsed.toString();
     }
 
-    private static long hash(String url) {
-        byte[] data = url.getBytes(UTF_8);
+    static long hash(String s) {
+        byte[] data = s.getBytes(UTF_8);
         return xxhash.hash(data, 0, data.length, 0);
     }
 
@@ -54,6 +54,14 @@ public class Url implements Comparable<Url> {
 
     public String path() {
         return parsed.getPath();
+    }
+
+    public String pathref() {
+        return parsed.getPath() + parsed.getQuestionMark() + parsed.getQuery();
+    }
+
+    public long pathId() {
+        return hash(pathref());
     }
 
     public URL toURL() {

@@ -8,15 +8,19 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.WRITE;
@@ -26,7 +30,7 @@ public class Storage implements Closeable {
     private final Config config;
     private final Database db;
     private WarcWriter warcWriter;
-    private int serial = 0;
+    private static int serial = 0;
     private UUID warcId;
 
     public Storage(Config config, Database db) throws IOException {
@@ -54,7 +58,7 @@ public class Storage implements Closeable {
         db.warcs.insert(warcId, warcPath.toString(), date);
     }
 
-    private synchronized int nextSerial() {
+    private static synchronized int nextSerial() {
         int current = serial;
         serial++;
         if (serial >= 100000) serial = 0;
@@ -63,7 +67,7 @@ public class Storage implements Closeable {
 
     synchronized void save(Exchange exchange) throws IOException {
         if (exchange.fetchStatus > 0 && exchange.httpRequest != null) {
-            UUID requestId = exchange.id;
+            UUID requestId = UuidCreator.getTimeOrdered();
             WarcRequest request = new WarcRequest.Builder(exchange.url.toURI())
                     .version(MessageVersion.WARC_1_1)
                     .recordId(requestId)
@@ -74,51 +78,58 @@ public class Storage implements Closeable {
             if (warcWriter == null || (config.warcMaxLengthBytes > 0 && warcWriter.position() > config.warcMaxLengthBytes)) {
                 openNextFile();
             }
-            writeRecord(exchange, requestId, request, null);
+            exchange.warcId = warcId;
+            exchange.requestPosition = warcWriter.position();
+            warcWriter.write(request);
+            exchange.requestLength = warcWriter.position() - exchange.requestPosition;
 
             if (exchange.httpResponse != null) {
                 exchange.bufferFile.position(0);
                 UUID responseId = UuidCreator.getTimeOrdered();
                 WarcCaptureRecord response = buildResponse(responseId, exchange, request);
-                writeRecord(exchange, responseId, response, exchange.digest);
+                exchange.responsePosition = warcWriter.position();
+                warcWriter.write(response);
+                exchange.responseLength = warcWriter.position() - exchange.responsePosition;
                 exchange.responseId = responseId;
             }
         }
     }
 
-    private void writeRecord(Exchange exchange, UUID recordId, WarcRecord record, byte[] payloadDigest) throws IOException {
-        long offset = warcWriter.position();
-        warcWriter.write(record);
-        long length = warcWriter.position() - offset;
-        db.records.insert(recordId, exchange.id, record.type(), warcId, offset, length, payloadDigest);
-    }
-
     private WarcCaptureRecord buildResponse(UUID responseId, Exchange exchange, WarcRequest request) throws IOException {
-        if (config.dedupeServer && exchange.httpResponse.status() == 304 && exchange.location.etagResponseId != null) {
-            exchange.revisitOf = exchange.location.etagResponseId;
-            return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.SERVER_NOT_MODIFIED_1_1)
-                    .version(MessageVersion.WARC_1_1)
-                    .recordId(responseId)
-                    .date(exchange.date)
-                    .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
-                    .concurrentTo(request.id())
-                    .ipAddress(exchange.ip)
-                    .refersTo(exchange.location.etagResponseId, exchange.url.toURI(), exchange.location.etagDate)
-                    .build();
+        if (config.dedupeServer && exchange.httpResponse.status() == 304 && exchange.prevVisit != null) {
+                exchange.revisitOf = exchange.prevVisit;
+                return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.SERVER_NOT_MODIFIED_1_1)
+                        .version(MessageVersion.WARC_1_1)
+                        .recordId(responseId)
+                        .date(exchange.date)
+                        .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
+                        .concurrentTo(request.id())
+                        .ipAddress(exchange.ip)
+                        .refersTo(exchange.prevResponseId, exchange.url.toURI(), exchange.revisitOf.date)
+                        .build();
         }
 
-        var duplicate = db.records.findResponseByPayloadDigest(exchange.url.id(), exchange.digest);
-        if (config.dedupeDigest && duplicate.isPresent()) {
-            exchange.revisitOf = duplicate.get().id;
-            return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.IDENTICAL_PAYLOAD_DIGEST_1_1)
-                    .version(MessageVersion.WARC_1_1)
-                    .recordId(responseId)
-                    .date(exchange.date)
-                    .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
-                    .concurrentTo(request.id())
-                    .ipAddress(exchange.ip)
-                    .refersTo(duplicate.get().id, exchange.url.toURI(), duplicate.get().date)
-                    .build();
+        WarcDigest payloadDigest = new WarcDigest(config.warcDigestAlgorithm, exchange.digest);
+        Visit duplicate = db.visits.findByResponsePayloadDigest(exchange.location.originId, exchange.location.pathId, exchange.digest);
+        if (config.dedupeDigest && duplicate != null) {
+            try {
+                WarcResponse priorResponse = readResponseHeader(duplicate);
+                // we recheck the digest in the record as the database only keeps a truncated digest
+                if (priorResponse.payloadDigest().equals(Optional.of(payloadDigest))) {
+                    exchange.revisitOf = duplicate;
+                    return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.IDENTICAL_PAYLOAD_DIGEST_1_1)
+                            .version(MessageVersion.WARC_1_1)
+                            .recordId(responseId)
+                            .date(exchange.date)
+                            .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
+                            .concurrentTo(request.id())
+                            .ipAddress(exchange.ip)
+                            .refersTo(priorResponse.id(), priorResponse.targetURI(), priorResponse.date())
+                            .build();
+                }
+            } catch (IOException e) {
+                log.warn("Failed reading prior record", e);
+            }
         }
 
         return new WarcResponse.Builder(exchange.url.toURI())
@@ -128,21 +139,25 @@ public class Storage implements Closeable {
                 .body(MediaType.HTTP_RESPONSE, exchange.bufferFile, exchange.bufferFile.size())
                 .concurrentTo(request.id())
                 .ipAddress(exchange.ip)
-                .payloadDigest(new WarcDigest(config.warcDigestAlgorithm, exchange.digest))
+                .payloadDigest(payloadDigest)
                 .build();
     }
 
-    void readResponseForVisit(UUID visitId, Util.IOConsumer<WarcResponse> consumer) throws IOException {
-        readRecord(consumer, db.records.locateByVisitId(visitId, "response"));
+    WarcResponse readResponseHeader(Visit visit) throws IOException {
+        var tmp = new WarcResponse[1];
+        readResponse(visit, response -> tmp[0] = response);
+        return tmp[0];
     }
 
-    void readResponse(UUID recordId, Util.IOConsumer<WarcResponse> consumer) throws IOException {
-        readRecord(consumer, db.records.locate(recordId));
+    void readResponse(Visit visit, Util.IOConsumer<WarcResponse> consumer) throws IOException {
+        readRecord(consumer, visit.warcId, visit.responsePosition);
     }
 
-    private void readRecord(Util.IOConsumer<WarcResponse> consumer, Database.RecordLocation recordLocation) throws IOException {
-        try (FileChannel channel = FileChannel.open(Paths.get(recordLocation.path))) {
-            channel.position(recordLocation.position);
+    private void readRecord(Util.IOConsumer<WarcResponse> consumer, UUID warcId, long position) throws IOException {
+        String path = db.warcs.findPath(warcId);
+        if (path == null) throw new NoSuchFileException("warc " + warcId.toString());
+        try (FileChannel channel = FileChannel.open(Paths.get(path))) {
+            channel.position(position);
             try (WarcReader warcReader = new WarcReader(channel)) {
                 WarcRecord record = warcReader.next().orElse(null);
                 if (record == null) throw new IOException("Record was missing");

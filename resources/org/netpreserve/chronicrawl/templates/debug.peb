@@ -1,0 +1,10 @@
+{% extends "./layout.peb" %}
+
+{% block title %}Debug{% endblock %}
+
+{% block content %}
+<h2>Debug</h2>
+<form action="debug/load-dummy-data" method="post">
+    <button type="submit">Load Dummy Data</button>
+</form>
+{% endblock %}

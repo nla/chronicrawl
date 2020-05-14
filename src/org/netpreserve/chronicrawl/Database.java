@@ -246,7 +246,7 @@ public class Database implements AutoCloseable {
         }
 
         public Visit findByResponsePayloadDigest(long originId, long pathId, byte[] digest) {
-            Optional<Long> date = query.select("SELECT date FROM visit WHERE origin_id = ? AND path_id = ? AND response_payload_digest = ? LIMIT 1")
+            Optional<Long> date = query.select("SELECT date FROM visit WHERE origin_id = ? AND path_id = ? AND response_payload_digest = ? AND revisit_of_date IS NULL LIMIT 1")
                     .params(originId, pathId, Arrays.copyOf(digest, 8)).firstResult(Mappers.singleLong());
             if (date.isEmpty()) return null;
             return find(originId, pathId, Instant.ofEpochMilli(date.get()));
@@ -262,7 +262,7 @@ public class Database implements AutoCloseable {
                     .params(exchange.location.originId, exchange.location.pathId, exchange.date.toEpochMilli(), exchange.method,
                             exchange.fetchStatus, exchange.contentLength, exchange.contentType, toBytes(exchange.warcId),
                             exchange.requestPosition, exchange.requestLength, null, exchange.responsePosition,
-                            exchange.responseLength, Arrays.copyOf(exchange.digest, 8),
+                            exchange.responseLength, exchange.digest == null ? null : Arrays.copyOf(exchange.digest, 8),
                             exchange.revisitOf == null ? null : exchange.revisitOf.date.toEpochMilli()).run();
         }
 

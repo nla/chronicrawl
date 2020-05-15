@@ -172,9 +172,11 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     return newFixedLengthResponse(sb.toString());
                 }
                 case "GET /debug": {
+                    requireRole("admin");
                     return render(View.debug);
                 }
                 case "POST /debug/load-dummy-data": {
+                    requireRole("admin");
                     int origins = 100;
                     int locations = 1000;
                     long start = System.currentTimeMillis();
@@ -245,6 +247,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     crawl.paused.set(false);
                     return seeOther(contextPath + "/", "Unpaused.");
                 case "GET /recent.json": {
+                    requireRole("admin");
                     var json = JsonWriter.string().array();
                     for (var screenshot : db.screenshotCache.getN(5, paramLong("after", 0L))) {
                         json.object()

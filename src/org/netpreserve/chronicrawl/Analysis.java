@@ -53,7 +53,7 @@ public class Analysis {
         public final Url url;
         public final ResourceType type;
         public final Set<String> analysers = new ConcurrentSkipListSet<>();
-        public final Visit visit;
+        public Visit visit;
 
         public Resource(String method, Url url, ResourceType type, Visit visit, String analyser) {
             this.method = method;

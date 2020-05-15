@@ -381,7 +381,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 String authUrl = endpoint + "?response_type=code&client_id=" + URLEncoder.encode(crawl.config.oidcClientId, UTF_8) +
                         "&redirect_uri=" + URLEncoder.encode(redirectUri, UTF_8) + "&scope=openid&state=" + URLEncoder.encode(oidcState, UTF_8);
                 Response response = seeOther(authUrl);
-                response.addHeader("Set-Cookie", crawl.config.uiSessionCookie + "=" + id + "; Max-Age=" + crawl.config.uiSessionExpirySecs + "; HttpOnly; SameSite=Lax" + (isSecure() ? "; Secure" : "");
+                response.addHeader("Set-Cookie", crawl.config.uiSessionCookie + "=" + id + "; Max-Age=" + crawl.config.uiSessionExpirySecs + "; HttpOnly; SameSite=Lax" + (isSecure() ? "; Secure" : ""));
                 return response;
             }
             return null;

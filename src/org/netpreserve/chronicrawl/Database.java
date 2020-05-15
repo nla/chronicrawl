@@ -345,15 +345,16 @@ public class Database implements AutoCloseable {
             url = rs.getString("url");
             contentType = rs.getString("content_type");
             status = rs.getInt("status");
-            payloadDigest = Arrays.copyOf(rs.getBytes("response_payload_digest"), 20); // XXX: pad out to match sha1 length
+            byte[] digest = rs.getBytes("response_payload_digest");
+            payloadDigest = digest == null ? null : Arrays.copyOf(digest, 20); // XXX: pad out to match sha1 length
             length = rs.getLong("response_length");
             position = rs.getLong("response_position");
             warcId = getUUID(rs, "warc_id");
         }
 
         public String toString() {
-            String digest = new WarcDigest("sha1", payloadDigest).base32();
-            return "- " + Util.ARC_DATE.format(date) + " " + url + " " + contentType + " " + status + " " + digest + " - - "
+            String digest = payloadDigest == null ? null : new WarcDigest("sha1", payloadDigest).base32();
+            return "- " + Util.ARC_DATE.format(date) + " " + url + " " + contentType + " " + status + " " + (digest == null ? "-" : digest) + " - - "
                     + length + " " + position + " ?id=" + warcId;
         }
     }

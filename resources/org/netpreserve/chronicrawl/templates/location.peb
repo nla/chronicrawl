@@ -11,6 +11,14 @@
     <tr><th>Next visit:</th><td>{{ location.nextVisit | default("") }}</td></tr>
 </table>
 
+<nav>
+    <form action="location/visit-now" method=post>
+        <input name=o value="{{ location.originId }}" type=hidden>
+        <input name=p value="{{ location.pathId }}" type=hidden>
+        <button type=submit>Visit Now</button>
+    </form>
+</nav>
+
 <h3>Visits</h3>
 <table>
     {% for visit in visits %}
@@ -20,6 +28,7 @@
             <td>{{ visit.status }}</td>
             <td>{{ visit.contentType }}</td>
             <td>{{ visit.contentLength }}</td>
+            <td>{% if visit.revisitOfDate is not null %}(not modified){% endif %}</td>
         </tr>
     {% endfor %}
 </table>

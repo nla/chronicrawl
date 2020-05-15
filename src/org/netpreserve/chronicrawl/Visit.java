@@ -1,5 +1,6 @@
 package org.netpreserve.chronicrawl;
 
+import javax.xml.crypto.Data;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -20,6 +21,7 @@ public class Visit {
     public final long responsePosition;
     public final long responseLength;
     public final byte[] responsePayloadDigest;
+    public final Instant revisitOfDate;
 
     public Visit(ResultSet rs) throws SQLException {
         originId = rs.getLong("origin_id");
@@ -36,6 +38,7 @@ public class Visit {
         responsePosition = rs.getLong("response_position");
         responseLength = rs.getLong("response_length");
         responsePayloadDigest = rs.getBytes("response_payload_digest");
+        revisitOfDate = Database.getInstant(rs, "revisit_of_date");
     }
 
     public String href() {

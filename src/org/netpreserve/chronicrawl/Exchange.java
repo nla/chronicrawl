@@ -99,7 +99,7 @@ public class Exchange implements Closeable {
                 .addHeader("Connection", "close")
                 .version(MessageVersion.HTTP_1_0);
         if (crawl.config.dedupeServer) {
-            prevVisit = crawl.db.visits.lastSuccessful(location.originId, location.pathId);
+            prevVisit = crawl.db.visits.findClosest(location.originId, location.pathId, date, method);
             if (prevVisit != null) {
                 try {
                     crawl.storage.readResponse(prevVisit, response -> {
@@ -160,7 +160,7 @@ public class Exchange implements Closeable {
             bufferFile.position(0);
             httpResponse = HttpResponse.parse(bufferFile);
 
-            if (Status.isSuccess(fetchStatus)) {
+            if (Status.isSuccess(fetchStatus) && revisitOf == null) {
                 switch (location.type) {
                     case ROBOTS:
                         processRobots();

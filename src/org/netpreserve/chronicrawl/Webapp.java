@@ -94,7 +94,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         return response;
     }
     private static String html(String s) {
-        return s == null ? null : s.replace("<", "&lt;").replace("&", "&amp;");
+        return s == null ? null : s.replace("&", "&amp;").replace("<", "&lt;");
     }
 
     static class Session {
@@ -208,6 +208,20 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     String url = param("url");
                     crawl.addSeed(url);
                     return seeOther(contextPath + "/", "Added.");
+                }
+                case "POST /location/visit-now": {
+                    requireRole("admin");
+                    Location location = db.locations.find(paramLong("o"), paramLong("p"));
+                    Origin origin = db.origins.find(location.originId);
+                    try (Exchange exchange = new Exchange(crawl, origin, location, "GET", Map.of())) {
+                        exchange.run();
+                        if (exchange.fetchStatus < 0) {
+                            return seeOther(contextPath + "/" + location.href(), "Visit failed! (" + exchange.fetchStatus + ")");
+                        } else {
+                            return seeOther(contextPath + "/visit?o=" + location.originId + "&p=" + location.pathId
+                                    + "&d=" + exchange.date.toEpochMilli(), "Visit successful!");
+                        }
+                    }
                 }
                 case "GET /log":
                     requireRole("admin");
@@ -391,7 +405,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
             Response response = newFixedLengthResponse(REDIRECT_SEE_OTHER, null, null);
             response.addHeader("Location", location);
             if (flash != null) {
-                response.addHeader("Set-Cookie", "flash=" + URLEncoder.encode(flash, UTF_8) + "; HttpOnly; Max-Age=60");
+                response.addHeader("Set-Cookie", "flash=" + Base64.getUrlEncoder().encodeToString(flash.getBytes(UTF_8)) + "; HttpOnly; Max-Age=60");
             }
             return response;
         }
@@ -430,7 +444,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
             String flash = request.getCookies().read("flash");
             if (flash != null) {
                 request.getCookies().delete("flash");
-                model.put("flash", URLDecoder.decode(flash, UTF_8));
+                model.put("flash", new String(Base64.getUrlDecoder().decode(flash), UTF_8));
             } else {
                 model.put("flash", null);
             }

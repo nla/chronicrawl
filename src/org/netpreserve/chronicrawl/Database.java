@@ -273,11 +273,6 @@ public class Database implements AutoCloseable {
             return closest.map(date -> find(originId, pathId, Instant.ofEpochMilli(date))).orElse(null);
         }
 
-        public Visit lastSuccessful(long originId, long pathId) {
-            return query.select("SELECT * FROM visit WHERE origin_id = ? AND path_id = ? AND status >= 200 AND status <= 299 " +
-                    "ORDER BY date DESC LIMIT 1").params(originId, pathId).firstResult(Visit::new).orElse(null);
-        }
-
         public List<CdxLine> asCdxLines(long originId, long pathId) {
             return query.select("SELECT v.date, (o.origin || l.path) as url, ct.content_type, v.status, " +
                     "v.response_payload_digest, v.response_length, v.response_position, v.warc_id " +

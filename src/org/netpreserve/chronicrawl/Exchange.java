@@ -80,11 +80,13 @@ public class Exchange implements Closeable {
         if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url.toString())) {
             fetch();
             crawl.storage.save(this);
-            finish();
         } else {
             fetchStatus = Status.ROBOTS_DISALLOWED;
         }
-        process();
+        finish();
+        if (fetchStatus > 0) {
+            process();
+        }
     }
 
     private SimpleRobotRules parseRobots(String url, byte[] robotsTxt) {

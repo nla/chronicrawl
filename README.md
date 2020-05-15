@@ -5,7 +5,11 @@ continuous crawling and mixing of browser-based crawling with traditional link e
 
 ## Status
 
-Chronicrawl is in an early stage of development and is barely usable. Currently it:
+Chronicrawl is at an early stage of development but is (barely) usable for basic crawling functions.
+
+<img height=128px src="https://user-images.githubusercontent.com/10588/82002093-d79f7080-9697-11ea-9ae7-8049e54e2dae.png"> <img height=128px src="https://user-images.githubusercontent.com/10588/82002097-da9a6100-9697-11ea-954d-57590df1abe2.png"> <img height=128px src="https://user-images.githubusercontent.com/10588/82001920-4defa300-9697-11ea-9ef0-d1a11b3a815f.png">
+
+Currently it:
 
 * keeps the crawl state in an embedded ~~H2~~ Sqlite SQL database (still experimenting with db options, it currently
   uses a fairly portable subset of SQL)

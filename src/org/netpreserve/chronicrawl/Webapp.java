@@ -161,7 +161,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     var lines = new ArrayList<Database.CdxLine>();
                     lines.addAll(db.visits.asCdxLines(url.originId(), url.pathId()));
                     if (url.scheme().equals("http")) {
-                        lines.addAll(db.visits.asCdxLines(url.originId(), url.pathId()));
+                        Url altUrl = url.withScheme("https");
+                        lines.addAll(db.visits.asCdxLines(altUrl.originId(), altUrl.pathId()));
                     }
                     StringBuilder sb = new StringBuilder();
                     for (var line : lines) {

@@ -381,7 +381,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 String authUrl = endpoint + "?response_type=code&client_id=" + URLEncoder.encode(crawl.config.oidcClientId, UTF_8) +
                         "&redirect_uri=" + URLEncoder.encode(redirectUri, UTF_8) + "&scope=openid&state=" + URLEncoder.encode(oidcState, UTF_8);
                 Response response = seeOther(authUrl);
-                response.addHeader("Set-Cookie", crawl.config.uiSessionCookie + "=" + id + "; Max-Age=" + crawl.config.uiSessionExpirySecs + "; HttpOnly");
+                response.addHeader("Set-Cookie", crawl.config.uiSessionCookie + "=" + id + "; Max-Age=" + crawl.config.uiSessionExpirySecs + "; HttpOnly; SameSite=Lax" + (isSecure() ? "; Secure" : "");
                 return response;
             }
             return null;
@@ -389,6 +389,10 @@ public class Webapp extends NanoHTTPD implements Closeable {
 
         private String contextUrl() {
             return request.getHeaders().getOrDefault("x-forwarded-proto", "http") + "://" + request.getHeaders().get("host") + contextPath;
+        }
+
+        private boolean isSecure() {
+            return request.getHeaders().getOrDefault("x-forwarded-proto", "http").equals("https");
         }
 
         private String newSessionId() {
@@ -405,7 +409,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
             Response response = newFixedLengthResponse(REDIRECT_SEE_OTHER, null, null);
             response.addHeader("Location", location);
             if (flash != null) {
-                response.addHeader("Set-Cookie", "flash=" + Base64.getUrlEncoder().encodeToString(flash.getBytes(UTF_8)) + "; HttpOnly; Max-Age=60");
+                response.addHeader("Set-Cookie", "flash=" + Base64.getUrlEncoder().encodeToString(flash.getBytes(UTF_8)) + "; HttpOnly; Max-Age=60; SameSite=Lax" + (isSecure() ? "; Secure" : ""));
             }
             return response;
         }

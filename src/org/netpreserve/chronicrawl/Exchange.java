@@ -155,10 +155,10 @@ public class Exchange implements Closeable {
     }
 
     private void process() throws IOException {
-        bufferFile.position(0);
-        httpResponse = HttpResponse.parse(bufferFile);
-
         try {
+            bufferFile.position(0);
+            httpResponse = HttpResponse.parse(bufferFile);
+
             if (Status.isSuccess(fetchStatus)) {
                 switch (location.type) {
                     case ROBOTS:
@@ -174,6 +174,7 @@ public class Exchange implements Closeable {
             }
         } catch (Exception e) {
             log.warn("Processing " + url + " failed", e);
+            fetchStatus = Status.UNEXPECTED_RUNTIME_EXCEPTION;
         }
     }
 

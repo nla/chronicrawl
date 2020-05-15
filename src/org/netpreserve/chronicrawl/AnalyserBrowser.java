@@ -57,7 +57,7 @@ public class AnalyserBrowser {
                     request.fail("InternetDisconnected");
                     return;
                 }
-                crawl.enqueue(analysis.location, Instant.now(), subUrl, TRANSCLUSION, 40);
+                crawl.enqueue(analysis.location, Instant.now(), subUrl, TRANSCLUSION);
                 Origin origin = crawl.db.origins.find(subUrl.originId());
                 if (origin.crawlPolicy == CrawlPolicy.FORBIDDEN) {
                     log.trace("Subresource forbidden by crawl policy: {}", subUrl);

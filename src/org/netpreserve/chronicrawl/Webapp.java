@@ -190,7 +190,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                             String origin = "http://" + UUID.randomUUID().toString() + ".localhost";
                             db.origins.tryInsert(Url.hash(origin), origin, Instant.now(), CrawlPolicy.CONTINUOUS);
                             for (int j = 0; j < locations; j++) {
-                                db.locations.tryInsert(new Url(origin + "/" + UUID.randomUUID()), Location.Type.PAGE, null, 0, Instant.now(), 0);
+                                db.locations.tryInsert(new Url(origin + "/" + UUID.randomUUID()), Location.Type.PAGE, null, 0, Instant.now());
                             }
                         }
                     });

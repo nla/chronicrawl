@@ -171,7 +171,7 @@ public class Database implements AutoCloseable {
 
 
 
-        public void tryInsert(Url url, Location.Type type, Url viaUrl, int depth, Instant discovered, int priority) {
+        public void tryInsert(Url url, Location.Type type, Url viaUrl, int depth, Instant discovered) {
             do {
                 var existingPath = findPath(url);
                 if (existingPath.isEmpty()) {

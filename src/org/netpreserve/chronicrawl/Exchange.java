@@ -1,6 +1,5 @@
 package org.netpreserve.chronicrawl;
 
-import com.github.f4b6a3.uuid.UuidCreator;
 import crawlercommons.robots.SimpleRobotRules;
 import crawlercommons.robots.SimpleRobotRulesParser;
 import org.netpreserve.jwarc.*;
@@ -184,11 +183,14 @@ public class Exchange implements Closeable {
         Visit visit = crawl.db.visits.find(location.originId, location.pathId, date);
         this.analysis = new Analysis(location, date);
         crawl.storage.readResponse(visit, response -> new AnalyserClassic(analysis).parseHtml(response));
+        for (var resource : analysis.resources()) {
+            crawl.enqueue(location, date, resource.url, Location.Type.TRANSCLUSION);
+        }
         if (analysis.hasScript) {
             new AnalyserBrowser(crawl, analysis, true);
         }
         for (Url link : analysis.links()) {
-            crawl.enqueue(location, date, link, Location.Type.PAGE, 50);
+            crawl.enqueue(location, date, link, Location.Type.PAGE);
         }
 
         if (analysis.screenshot != null) {
@@ -206,7 +208,7 @@ public class Exchange implements Closeable {
         }
         System.out.println("robots " + rules.getSitemaps());
         for (String sitemapUrl : rules.getSitemaps()) {
-            crawl.enqueue(location, date, location.url.resolve(sitemapUrl), Location.Type.SITEMAP, 2);
+            crawl.enqueue(location, date, location.url.resolve(sitemapUrl), Location.Type.SITEMAP);
         }
         crawl.db.origins.updateRobots(location.url.originId(), crawlDelay, content);
     }
@@ -214,7 +216,7 @@ public class Exchange implements Closeable {
     private void processSitemap() throws XMLStreamException, IOException {
         Sitemap.parse(httpResponse.body().stream(), entry -> {
             Url entryUrl = location.url.resolve(entry.loc);
-            crawl.enqueue(location, date, entryUrl, entry.type, entry.type == Location.Type.SITEMAP ? 3 : 10);
+            crawl.enqueue(location, date, entryUrl, entry.type);
             crawl.db.sitemapEntries.insertOrReplace(this.url, entryUrl, entry.changefreq, entry.priority, entry.lastmod == null ? null : entry.lastmod.toString());
         });
     }

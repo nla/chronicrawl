@@ -5,22 +5,24 @@ continuous crawling and mixing of browser-based crawling with traditional link e
 
 ## Status
 
-Chronicrawl is in an early stage of development and is barely usable. Currently it can:
+Chronicrawl is in an early stage of development and is barely usable. Currently it:
 
-* keep the crawl state in an embedded H2 SQL database
-* fetch robots.txt and discover URLs via sitemaps
-* discover subresources by replaying captured documents to headless Chromium
-* periodically revisit resources (schedule currently hardcoded)
-* write WARC records (with both server not modified and identical digest dedupe)
-* show a primitive UI for exploring the state of the crawl and testing the browser integration
+* keeps the crawl state in an embedded ~~H2~~ Sqlite SQL database (still experimenting with db options, it currently
+  uses a fairly portable subset of SQL)
+* fetches robots.txt and discover URLs via sitemaps and links
+* discovers subresources by parsing HTML and also loading in Headless Chromium when script tags are detected
+* periodically revisits resources (schedule currently hardcoded)
+* writes WARC records (with both server not modified and identical digest dedupe)
+* shows a primitive UI for exploring the state of the crawl and examining the content analysis
+* replays archived content using Pywb
 
 but many serious limitations still need to be addressed:
 
 * the main crawl loop is single-threaded
 * error handling is incomplete
-* there's no balancing of crawls against different sites
 * the revisit schedule is hardcoded
-* no effort has been put into performance yet, the database doesn't even have indexes
+* there's no real prioritisation system yet
+* only a little effort has been put into performance so far
 * it only speaks HTTP/1.0 without keep-alive
 * essential options like url scoping are missing
 
@@ -36,9 +38,6 @@ To compile install Apache Maven and then run:
 
     mvn package
     java -jar target/chronicrawl-*-with-dependencies.jar
-    
-The first time you run Chronicrawl pass it the --init option to create the database. (This option will currently 
-also wipe an existing database.)
 
 ## Configuration
 

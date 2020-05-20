@@ -11,10 +11,8 @@ import java.io.*;
 import java.net.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
@@ -116,8 +114,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
 
     private class RequestContext {
         final IHTTPSession request;
-        private Session session;
         private String role;
+        private Session session;
 
         private RequestContext(IHTTPSession request) {
             this.request = request;
@@ -164,8 +162,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /cdx": {
                     requireRole("admin", "pywb");
                     Url url = new Url(param("url"));
-                    var lines = new ArrayList<Database.CdxLine>();
-                    lines.addAll(db.visits.asCdxLines(url.originId(), url.pathId()));
+                    var lines = new ArrayList<>(db.visits.asCdxLines(url.originId(), url.pathId()));
                     if (url.scheme().equals("http")) {
                         Url altUrl = url.withScheme("https");
                         lines.addAll(db.visits.asCdxLines(altUrl.originId(), altUrl.pathId()));
@@ -201,7 +198,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     requireRole("admin");
                     Location location = db.locations.find(paramLong("o"), paramLong("p"));
                     return render(View.location, "location", location,
-                            "via", location.viaPathId == null ? null : db.locations.find(location.viaOriginId, location.viaPathId),
+                            "via", location.viaOriginId == null || location.viaPathId == null ? null :
+                                    db.locations.find(location.viaOriginId, location.viaPathId),
                             "visits", db.visits.list(location.originId, location.pathId));
                 }
                 case "POST /location/add": {
@@ -285,7 +283,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /record/serve": {
                     requireRole("admin", "pywb");
                     UUID id = UUID.fromString(param("id"));
-                    Path path = Paths.get(db.warcs.findPath(id));
+                    String path = db.warcs.findPath(id);
                     if (path == null) throw new NotFound();
                     String range = request.getHeaders().get("range");
                     Matcher matcher = Pattern.compile("bytes=([0-9]+)-([0-9]+)").matcher(range);
@@ -294,7 +292,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     long rangeEnd = Long.parseLong(matcher.group(2));
                     long length = rangeEnd - rangeStart - 1;
                     if (length < 0) throw new BadRequest("negative range length");
-                    FileChannel channel = FileChannel.open(path);
+                    FileChannel channel = FileChannel.open(Paths.get(path));
                     channel.position(rangeStart);
                     return newFixedLengthResponse(OK, "application/warc", Channels.newInputStream(channel), length);
                 }
@@ -373,14 +371,14 @@ public class Webapp extends NanoHTTPD implements Closeable {
             throw new MissingRoleException("Access denied. One of the following roles must be assigned: " + List.of(requiredRoles).toString());
         }
 
-        private Response authenticate() throws IOException, JsonParserException, SQLException {
+        private Response authenticate() throws IOException, JsonParserException {
             if (crawl.config.oidcUrl == null) {
                 session = new Session(null, "anonymous", "admin", null, Instant.MAX);
                 return null;
             }
             db.sessions.expire();
             String sessionId = request.getCookies().read(crawl.config.uiSessionCookie);
-            this.session = sessionId == null ? null : db.sessions.find(sessionId).orElse(null);
+            session = sessionId == null ? null : db.sessions.find(sessionId).orElse(null);
             if (session != null && request.getUri().equals(contextPath + "/authcb") && param("state").equals(session.oidcState)) {
                 // exchange code for access token
                 var conn = (HttpURLConnection) new URL(oidcConfig().getString("token_endpoint")).openConnection();

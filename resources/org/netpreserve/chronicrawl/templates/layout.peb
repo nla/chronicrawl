@@ -18,13 +18,15 @@
         box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23); outline: none }
     a.button:hover { background-color: deepskyblue; }
     h2 { font-weight: lighter; }
+    th { text-align: left; }
 </style>
-<title>{% block title %}Home{% endblock %} - Chronicrawl</title>
+<title>{% block title %}Chronicrawl{% endblock %}</title>
 <nav class="top-bar">
     <h1>{ <a href="./">Chronicrawl</a> }</h1>
     <ul>
         <li><a href="log">Log</a>
         <li><a href="queue">Queue</a>
+        <li><a href="settings">Settings</a>
         <li><form action="search"><input name="q" placeholder="Find URL..."></form>
     </ul>
 </nav>

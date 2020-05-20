@@ -5,6 +5,7 @@ DROP TABLE IF EXISTS snapshot;
 DROP TABLE IF EXISTS location;
 DROP TABLE IF EXISTS origin;
 DROP TABLE IF EXISTS warc;
+DROP TABLE IF EXISTS schedule;
 DROP TABLE IF EXISTS session;
 DROP TABLE IF EXISTS screenshot_cache;
 
@@ -136,7 +137,7 @@ CREATE TABLE visit
 
 CREATE TABLE session
 (
-    id         VARCHAR(30)  NOT NULL,
+    id         VARCHAR(30)  NOT NULL PRIMARY KEY,
     username   VARCHAR(128) NULL,
     role       VARCHAR(64)  NOT NULL DEFAULT 'anonymous',
     oidc_state VARCHAR(30)  NOT NULL,
@@ -149,5 +150,32 @@ CREATE TABLE screenshot_cache
     path_id    BIGINT    NOT NULL,
     date       BIGINT NOT NULL,
     screenshot BLOB      NOT NULL,
+    PRIMARY KEY (origin_id, path_id, date),
     FOREIGN KEY (origin_id, path_id, date) REFERENCES visit ON DELETE CASCADE
 );
+
+CREATE TABLE schedule
+(
+    id           BIGINT       NOT NULL PRIMARY KEY,
+    name         VARCHAR(128) NOT NULL UNIQUE,
+    years        INT          NOT NULL DEFAULT 0,
+    months       INT          NOT NULL DEFAULT 0,
+    days         INT          NOT NULL DEFAULT 0,
+    days_of_week TINYINT      NOT NULL DEFAULT 0,
+    hours_of_day INT          NOT NULL DEFAULT 0
+);
+
+INSERT INTO schedule (id, name, years, months, days, days_of_week, hours_of_day)
+VALUES (0, 'Daily', 0, 0, 1, 0, 0),
+       (1, 'Weekly', 0, 0, 7, 0, 0),
+       (2, 'Fortnightly', 0, 0, 14, 0, 0),
+       (3, '2-Monthly', 0, 2, 0, 0, 0),
+       (4, 'Quarterly', 0, 3, 0, 0, 0),
+       (5, 'Half-Annual', 0, 6, 0, 0, 0),
+       (6, '9-Monthly', 0, 9, 0, 0, 0),
+       (7, 'Annual', 1, 0, 0, 0, 0),
+       (8, '18-Monthly', 0, 18, 0, 0, 0),
+       (9, 'Biennial', 2, 0, 0, 0, 0),
+       (10, 'Twice-Daily', 0, 0, 0, 0, 1048832),
+       (11, 'Weekdays', 0, 0, 0, 31, 0),
+       (12, 'Weekends', 0, 0, 0, 96, 0);

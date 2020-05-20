@@ -24,8 +24,10 @@ import static java.util.Objects.requireNonNull;
 public class Database implements AutoCloseable {
     private final HikariDataSource dataSource;
     final Query query;
+    public final IdGenerator ids = new IdGenerator(0); // TODO: claim unique nodeId
     public final LocationDAO locations = new LocationDAO();
     public final OriginDAO origins = new OriginDAO();
+    public final ScheduleDAO schedules = new ScheduleDAO();
     public final ScreenshotCacheDAO screenshotCache = new ScreenshotCacheDAO();
     public final SitemapEntryDAO sitemapEntries = new SitemapEntryDAO();
     public final SessionDAO sessions = new SessionDAO();
@@ -218,6 +220,30 @@ public class Database implements AutoCloseable {
         public void updateVisitData(long originId, long pathId, Instant lastVisit, Instant nextVisit) {
             check(query.update("UPDATE location SET next_visit = ?, last_visit = ? WHERE origin_id = ? AND path_id = ?")
                     .params(nextVisit.toEpochMilli(), lastVisit.toEpochMilli(), originId, pathId).run());
+        }
+    }
+
+    public class ScheduleDAO {
+        public List<Schedule> list() {
+            return query.select("SELECT * FROM schedule").listResult(Schedule::new);
+        }
+
+        public Schedule find(long id) {
+            return query.select("SELECT * FROM schedule WHERE id = ?").params(id).singleResult(Schedule::new);
+        }
+
+        public void delete(long id) {
+            check(query.update("DELETE FROM schedule WHERE id = ?").params(id).run());
+        }
+
+        public void update(long id, String name, int years, int months, int days, int daysOfWeek, int hoursOfDay) {
+            check(query.update("UPDATE schedule SET name = ?, years = ?, months = ?, days = ?, days_of_week = ?, " +
+                    "hours_of_day = ? WHERE id = ?").params(name, years, months, days, daysOfWeek, hoursOfDay, id).run());
+        }
+
+        public void insert(long id, String name, int years, int months, int days, int dayOfWeek, int hourOfDay) {
+            query.update("INSERT INTO schedule (id, name, years, months, days, days_of_week, hours_of_day) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)").params(id, name, years, months, days, dayOfWeek, hourOfDay).run();
         }
     }
 
@@ -419,5 +445,44 @@ public class Database implements AutoCloseable {
                 "ORDER BY v.date DESC LIMIT ?")
                 .params(after, limit)
                 .listResult(Mappers.map());
+    }
+
+    public static class IdGenerator {
+        private static final long ID_EPOCH = Instant.parse("2020-01-01T00:00:00Z").toEpochMilli();
+        private static final long MAX_TIME = (1L << 41) - 1L;
+        private int counter;
+        private long prevTimestamp;
+        private final int nodeId;
+
+        public IdGenerator(int nodeId) {
+            this.nodeId = nodeId;
+            if (nodeId < 0 || nodeId > 65535) throw new IllegalArgumentException("expected unsigned 16-bit node id not " + nodeId);
+        }
+
+        public long next() {
+            long timestamp = System.currentTimeMillis() - ID_EPOCH;
+            if (timestamp > MAX_TIME) throw new IllegalStateException("Year 2089 bug. :)");
+            long seq;
+            synchronized (this) {
+                if (timestamp > prevTimestamp) {
+                    prevTimestamp = timestamp;
+                    counter = 0;
+                    seq = 0;
+                } else {
+                    seq = ++counter;
+                }
+            }
+
+            if (seq > 64) {
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                return next();
+            }
+
+            return (timestamp << 22) | (seq << 16) | nodeId;
+        }
     }
 }

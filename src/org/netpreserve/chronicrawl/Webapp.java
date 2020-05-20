@@ -22,6 +22,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static fi.iki.elonen.NanoHTTPD.Response.Status.*;
+import static java.lang.Integer.parseInt;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class Webapp extends NanoHTTPD implements Closeable {
@@ -306,6 +307,41 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     if (db.origins.find(url.originId()) != null) return seeOther("origin?id=" + url.originId());
                     return render(View.searchNoResults, "url", url);
                 }
+                case "GET /settings": {
+                    requireRole("admin");
+                    List<Schedule> schedules = new ArrayList<>(db.schedules.list());
+                    schedules.sort(Comparator.naturalOrder());
+                    return render(View.settings, "schedules", schedules);
+                }
+                case "GET /settings/schedule": {
+                    requireRole("admin");
+                    Long id = paramLong("id", null);
+                    Schedule schedule = id == null ? null : db.schedules.find(id);
+                    return render(View.settingsSchedule, "schedule", schedule,
+                            "dayNames", Schedule.dayNames(),
+                            "hourNames", Schedule.hourNames());
+                }
+                case "POST /settings/schedule": {
+                    requireRole("admin");
+                    Long id = paramLong("id", null);
+                    if (id == null) {
+                        db.schedules.insert(db.ids.next(), param("name"), parseInt(param("years")),
+                                parseInt(param("months")), parseInt(param("days")),
+                                toBits(request.getParameters().get("dayOfWeek")),
+                                toBits(request.getParameters().get("hourOfDay")));
+                    } else {
+                        db.schedules.update(id, param("name"), parseInt(param("years")),
+                                parseInt(param("months")), parseInt(param("days")),
+                                toBits(request.getParameters().get("dayOfWeek")),
+                                toBits(request.getParameters().get("hourOfDay")));
+                    }
+                    return seeOther(contextPath + "/settings", "Schedule saved.");
+                }
+                case "POST /settings/schedule/delete": {
+                    requireRole("admin");
+                    db.schedules.delete(paramLong("id"));
+                    return seeOther(contextPath + "/settings", "Schedule deleted.");
+                }
                 case "GET /visit":
                     requireRole("admin");
                     Visit visit = db.visits.find(paramLong("o"), paramLong("p"), Instant.ofEpochMilli(paramLong("d")));
@@ -317,6 +353,15 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 default:
                     throw new NotFound();
             }
+        }
+
+        private int toBits(List<String> values) {
+            if (values == null) return 0;
+            int bits = 0;
+            for (String value : values) {
+                bits |= 1 << parseInt(value);
+            }
+            return bits;
         }
 
         private void requireRole(String... requiredRoles) {
@@ -429,7 +474,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
 
         private Long paramLong(String name, Long defaultValue) {
             String value = param(name, null);
-            return value == null ? defaultValue : Long.parseLong(value);
+            return value == null ? defaultValue : Long.valueOf(value);
         }
 
         private String param(String name) {
@@ -481,7 +526,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin, visit, analyse, searchNoResults, queue, debug;
+        home, location, log, origin, visit, analyse, searchNoResults, queue, debug, settingsSchedule, settings;
 
         private final PebbleTemplate template;
 

@@ -1,0 +1,54 @@
+{# @pebvariable name="schedule" type="org.netpreserve.chronicrawl.Schedule" #}
+{% extends "./layout.peb" %}
+
+{% block content %}
+<style>
+    .columns { display: flex; }
+    .columns > fieldset { margin-right: 12px; }
+    .columns fieldset label { display: block; }
+    .hourNames { column-count: 2; }
+</style>
+
+<h2>Schedule</h2>
+
+<form method=post>
+    <label>Name: <input name=name required value="{{ schedule.name | default('') }}"></label>
+    <p>
+        Every
+        <label><input name=years size=2 type=number min=0 value={{ schedule.years | default('0') }}> years</label>,
+        <label><input name=months size=2 type=number min=0 value={{ schedule.months | default('0') }}> months</label> and
+        <label><input name=days size=2 type=number min=0 value={{ schedule.days | default('0') }}> days</label>
+    </p>
+
+    <div class=columns>
+        <fieldset>
+            <legend>On specific days</legend>
+            {% for dayName in dayNames %}
+                <label><input type=checkbox name=dayOfWeek value={{ loop.index }}
+                       {% if schedule is not null and schedule.hasDayOfWeek(loop.index) %}checked{% endif %}> {{ dayName }}</label>
+            {% endfor %}
+        </fieldset>
+
+        <fieldset>
+            <legend>At specific times</legend>
+            <div class=hourNames>
+                {% for hourName in hourNames %}
+                    <label><input type=checkbox name=hourOfDay value={{ loop.index }}
+                           {% if schedule is not null and schedule.hasHourOfDay(loop.index) %}checked{% endif %}> {{ hourName }}</label>
+                {% endfor %}
+            </div>
+        </fieldset>
+    </div>
+    <p>
+    <div>
+        <button type=submit>Save</button>
+        {% if schedule is not null %}
+            <button style="margin-left:200px; color: white; background-color: red" type=submit
+                    formaction="settings/schedule/delete?id={{ schedule.id }}"
+                    onclick="return confirm('Are you sure you wish to delete schedule {{schedule.name}}?')">Delete</button>
+        {% endif %}
+    </div>
+</form>
+
+
+{% endblock %}

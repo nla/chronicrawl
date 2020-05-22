@@ -2,33 +2,37 @@
 <meta charset=utf-8>
 <base href="{{ contextPath }}/">
 <style>
-    body { font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif; }
+    body { font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif; width: 960px; }
     a { text-decoration: none; }
-    a:hover { text-decoration: underline; }
     nav.top-bar { display: flex; align-items: center; }
     nav.top-bar h1 { font-weight: lighter; letter-spacing: -0.05em; margin: 0; padding: 0; margin-right: 12px; font-size: 32px; }
     nav.top-bar h1 a { color: black; text-decoration: none; }
-    nav.top-bar ul { list-style-type: none; margin: 0; padding: 0; }
-    nav.top-bar ul li { display: inline-block; padding: 8px; }
+    nav.top-bar > a { padding: 12px; }
+    nav.top-bar input { margin-left: 16px; }
     .flash { background-color: lemonchiffon; padding: 16px; }
     details summary { cursor: pointer; user-select: none; }
     table.overview th { text-align: left; }
-    a.button { background-color: dodgerblue; padding: 16px 24px; border-radius: 5px; text-decoration: none;
-        color: white; display: inline-block; min-width: 64px; margin: 6px; font-family: 'DejaVu Sans', Arial, Helvetica, sans-serif;
-        box-shadow: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23); outline: none }
-    a.button:hover { background-color: deepskyblue; }
-    h2 { font-weight: lighter; }
+    .btn, .btn-delete, .btn-primary { padding: .375rem .75rem; border: none;
+        border-radius: .25rem; text-decoration: none;
+        color: white; display: inline-block; margin: 0px; box-sizing: border-box;
+        text-decoration: none; outline: none; font-size: 1rem; line-height: 1.5; min-width: 96px;
+        cursor: pointer; text-align: center; font-family: inherit; }
+    .btn { background: #eee; color: #000; }
+    .btn:hover { background-color: #ddd; }
+    .btn-primary { background-color: #0069d9; }
+    .btn-primary:hover { background-color: deepskyblue; }
+    .btn-delete { background-color: #c82333; margin-left: 124px; }
+    .btn-delete:hover { background-color: red; }
+    h2, h3 { font-weight: lighter; }
     th { text-align: left; }
 </style>
 <title>{% block title %}Chronicrawl{% endblock %}</title>
 <nav class="top-bar">
     <h1>{ <a href="./">Chronicrawl</a> }</h1>
-    <ul>
-        <li><a href="log">Log</a>
-        <li><a href="queue">Queue</a>
-        <li><a href="settings">Settings</a>
-        <li><form action="search"><input name="q" placeholder="Find URL..."></form>
-    </ul>
+    <a href="log">Log</a>
+    <a href="queue">Queue</a>
+    <a href="settings">Settings</a>
+    <form action="search"><input name="q" placeholder="Find URL..."></form>
 </nav>
 {% if flash is not null %}<div class="flash">{{ flash }}</div>{% endif %}
 {% block content %}Missing content block!{% endblock %}

@@ -1,3 +1,7 @@
+{# @pebvariable name="rules" type="java.util.List<org.netpreserve.chronicrawl.Rule>" #}
+{# @pebvariable name="allCrawlPolicies" type="java.util.List<org.netpreserve.chronicrawl.CrawlPolicy>" #}
+{# @pebvariable name="origin" type="org.netpreserve.chronicrawl.Origin" #}
+
 {% extends "./layout.peb" %}
 
 {% block content %}
@@ -21,6 +25,17 @@
         <tr><th>Robots crawl delay:</th><td>{{ origin.robotsCrawlDelay }}</td></tr>
     </table>
 </form>
+
+<p>
+<div>
+    <h3>Rules</h3>
+    <table>
+        {% for rule in rules %}
+            <tr><td><a href="rule?id={{ rule.id }}">{{ rule.pathRegex }}</a></td><td>{{ rule.scheduleName | default("") }}</td></tr>
+        {% endfor %}
+    </table>
+    <p><a href="rule?o={{ origin.id }}" class=btn-primary>New Rule</a></p>
+</div>
 
 {% if origin.robotsTxt is not null %}
 <p>

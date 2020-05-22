@@ -23,6 +23,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.*;
 
 import static java.nio.file.StandardOpenOption.*;
@@ -44,6 +45,7 @@ public class Exchange implements Closeable {
     final Url url;
     final String method;
     final Map<String, String> extraHeaders;
+    final Rule rule;
     public Visit revisitOf;
     public UUID warcId;
     public long requestPosition;
@@ -73,6 +75,8 @@ public class Exchange implements Closeable {
         url = location.url;
         this.via = location.viaPathId == null ? null : crawl.db.locations.find(location.viaOriginId, location.viaPathId);
         crawl.exchanges.add(this);
+        List<Rule> rules = crawl.db.rules.listForOriginId(origin.id);
+        this.rule = Rule.bestMatching(rules, location);
     }
 
     public void run() throws IOException {
@@ -225,9 +229,22 @@ public class Exchange implements Closeable {
         if (httpResponse != null) {
             contentType = httpResponse.contentType().base().toString();
         }
+
+        Instant nextVisit;
+        if (rule != null && rule.scheduleId != null) {
+            Schedule schedule = crawl.db.schedules.find(rule.scheduleId);
+            if (schedule != null) {
+                nextVisit = schedule.apply(date.atZone(ZoneId.systemDefault())).toInstant();
+            } else {
+                nextVisit = date.plus(Duration.ofDays(1));
+            }
+        } else {
+            nextVisit = date.plus(Duration.ofDays(1));
+        }
+
         crawl.db.query.transaction().inNoResult(() -> {
             crawl.db.origins.updateVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
-            crawl.db.locations.updateVisitData(location.url.originId(), location.url.pathId(), date, date.plus(Duration.ofDays(1)));
+            crawl.db.locations.updateVisitData(location.url.originId(), location.url.pathId(), date, nextVisit);
             crawl.db.visits.insert(this);
         });
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength,

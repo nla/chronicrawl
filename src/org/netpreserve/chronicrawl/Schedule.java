@@ -3,6 +3,8 @@ package org.netpreserve.chronicrawl;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.TextStyle;
 import java.time.temporal.TemporalAdjusters;
@@ -145,5 +147,9 @@ public class Schedule implements Comparable<Schedule> {
     static List<String> dayNames() {
         return Arrays.stream(DayOfWeek.values()).map(day -> day.getDisplayName(TextStyle.FULL, Locale.getDefault()))
                 .collect(toList());
+    }
+
+    public Instant apply(Instant prev) {
+        return apply(prev.atZone(ZoneId.systemDefault())).toInstant();
     }
 }

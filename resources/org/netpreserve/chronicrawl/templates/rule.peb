@@ -1,0 +1,30 @@
+{# @pebvariable name="rule" type="org.netpreserve.chronicrawl.Rule" #}
+{# @pebvariable name="schedules" type="java.util.List<org.netpreserve.chronicrawl.Schedule>" #}
+
+{% extends "./layout.peb" %}
+{% block content %}
+<style>form > label { display: block; margin-bottom: 6px; margin-top: 6px }</style>
+<h2>{% if rule is null %}New{% else %}Edit{% endif %} Rule</h2>
+
+<form method=post>
+    {% if rule is not null %}<input type=hidden name="o" value="{{ rule.originId }}">{% endif %}
+    <label>Path regex: <input name=pathRegex required value="{{ rule.pathRegex | default('') }}"></label>
+    <label>Schedule:
+        <select name=scheduleId>
+            {% for schedule in schedules %}
+                <option value={{ schedule.id }}
+                {%- if rule is not null and rule.scheduleId == schedule.id %} selected{% endif -%}
+                >{{ schedule.name }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <div>
+        <button type=submit class=btn-primary>Save</button>
+        <a href="origin?id={{ originId }}" class=btn>Cancel</a>
+        {% if rule is not null %}
+            <button type=submit class=btn-delete formaction="rule/delete?id={{ rule.id }}">Delete</button>
+        {% endif %}
+    </div>
+</form>
+
+{% endblock %}

@@ -27,6 +27,7 @@ public class Database implements AutoCloseable {
     public final IdGenerator ids = new IdGenerator(0); // TODO: claim unique nodeId
     public final LocationDAO locations = new LocationDAO();
     public final OriginDAO origins = new OriginDAO();
+    public final RuleDAO rules = new RuleDAO();
     public final ScheduleDAO schedules = new ScheduleDAO();
     public final ScreenshotCacheDAO screenshotCache = new ScreenshotCacheDAO();
     public final SitemapEntryDAO sitemapEntries = new SitemapEntryDAO();
@@ -221,11 +222,48 @@ public class Database implements AutoCloseable {
             check(query.update("UPDATE location SET next_visit = ?, last_visit = ? WHERE origin_id = ? AND path_id = ?")
                     .params(nextVisit.toEpochMilli(), lastVisit.toEpochMilli(), originId, pathId).run());
         }
+
+        public List<Location> paginate(long originId, long startPathId, int limit) {
+            return query.select("SELECT " + fields + " FROM location l " +
+                    "LEFT JOIN origin o ON o.id = l.origin_id " +
+                    "WHERE origin_id = ? AND path_id >= ? ORDER BY path_id ASC LIMIT ?").params(originId, startPathId, limit)
+                    .listResult(Location::new);
+        }
+    }
+
+    public class RuleDAO {
+        public List<Rule> listForOriginId(long originId) {
+            return query.select("SELECT rule.*, schedule.name AS schedule_name FROM rule " +
+                    "LEFT JOIN schedule ON schedule.id = rule.schedule_id " +
+                    "WHERE origin_id = ?").params(originId).listResult(Rule::new);
+        }
+
+        public void insert(long id, long originId, String pathRegex, Long scheduleId) {
+            query.update("INSERT INTO rule (id, origin_id, path_regex, schedule_id) VALUES (?, ?, ?, ?)")
+                    .params(id, originId, pathRegex, scheduleId).run();
+        }
+
+        public void update(Long id, long originId, String pathRegex, Long scheduleId) {
+            check(query.update("UPDATE rule SET origin_id = ?, path_regex = ?, schedule_id = ? WHERE id = ?")
+                    .params(originId, pathRegex, scheduleId, id).run());
+        }
+
+        public Rule find(long id) {
+            return query.select("SELECT rule.*, schedule.name AS schedule_name FROM rule " +
+                    "LEFT JOIN schedule ON schedule.id = rule.schedule_id " +
+                    "WHERE rule.id = ?").params(id).singleResult(Rule::new);
+        }
+
+        public void delete(long id) {
+            check(query.update("DELETE FROM rule WHERE id = ?").params(id).run());
+        }
     }
 
     public class ScheduleDAO {
         public List<Schedule> list() {
-            return query.select("SELECT * FROM schedule").listResult(Schedule::new);
+            List<Schedule> schedules = new ArrayList<>(query.select("SELECT * FROM schedule").listResult(Schedule::new));
+            schedules.sort(Comparator.naturalOrder());
+            return schedules;
         }
 
         public Schedule find(long id) {

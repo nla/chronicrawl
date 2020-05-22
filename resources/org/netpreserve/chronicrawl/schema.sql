@@ -179,3 +179,14 @@ VALUES (0, 'Daily', 0, 0, 1, 0, 0),
        (10, 'Twice-Daily', 0, 0, 0, 0, 1048832),
        (11, 'Weekdays', 0, 0, 0, 31, 0),
        (12, 'Weekends', 0, 0, 0, 96, 0);
+
+
+CREATE TABLE rule
+(
+    id          BIGINT       NOT NULL PRIMARY KEY,
+    origin_id   BIGINT       NOT NULL,
+    path_regex  VARCHAR(512) NOT NULL,
+    schedule_id BIGINT       NULL,
+    FOREIGN KEY (origin_id) REFERENCES origin ON DELETE CASCADE,
+    FOREIGN KEY (schedule_id) REFERENCES schedule
+);

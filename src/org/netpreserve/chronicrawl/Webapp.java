@@ -237,6 +237,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     }
                     Origin origin = found(db.origins.find(id));
                     return render(View.origin, "origin", origin,
+                            "rules", db.rules.listForOriginId(id),
                             "queue", db.locations.peek(id, 50),
                             "allCrawlPolicies", CrawlPolicy.values());
                 }
@@ -296,6 +297,41 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     channel.position(rangeStart);
                     return newFixedLengthResponse(OK, "application/warc", Channels.newInputStream(channel), length);
                 }
+                case "GET /rule": {
+                    requireRole("admin");
+                    Long id = paramLong("id", null);
+                    Rule rule;
+                    long originId;
+                    if (id == null) {
+                        rule = null;
+                        originId = paramLong("o");
+                    } else {
+                        rule = db.rules.find(id);
+                        originId = rule.originId;
+                    }
+                    return render(View.rule, "schedules", db.schedules.list(),
+                            "rule", rule,
+                            "originId", originId);
+                }
+                case "POST /rule": {
+                    requireRole("admin");
+                    long originId = paramLong("o");
+                    Long id = paramLong("id", null);
+                    if (id == null) {
+                        db.rules.insert(db.ids.next(), originId, param("pathRegex"), paramLong("scheduleId", null));
+                    } else {
+                        db.rules.update(id, originId, param("pathRegex"), paramLong("scheduleId", null));
+                    }
+                    Rule.reapplyRulesToOrigin(db, originId);
+                    return seeOther(contextPath + "/origin?id=" + originId, "Rule saved.");
+                }
+                case "POST /rule/delete": {
+                    requireRole("admin");
+                    long originId = paramLong("o");
+                    db.rules.delete(paramLong("id", null));
+                    Rule.reapplyRulesToOrigin(db, originId);
+                    return seeOther(contextPath + "/origin?id=" + originId, "Rule deleted.");
+                }
                 case "GET /search": {
                     requireRole("admin");
                     String q = param("q").strip();
@@ -307,9 +343,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 }
                 case "GET /settings": {
                     requireRole("admin");
-                    List<Schedule> schedules = new ArrayList<>(db.schedules.list());
-                    schedules.sort(Comparator.naturalOrder());
-                    return render(View.settings, "schedules", schedules);
+                    return render(View.settings, "schedules", db.schedules.list());
                 }
                 case "GET /settings/schedule": {
                     requireRole("admin");
@@ -524,7 +558,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin, visit, analyse, searchNoResults, queue, debug, settingsSchedule, settings;
+        home, location, log, origin, visit, analyse, searchNoResults, queue, debug, settingsSchedule, settings, rule;
 
         private final PebbleTemplate template;
 

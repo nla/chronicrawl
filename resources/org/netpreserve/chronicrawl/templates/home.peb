@@ -38,15 +38,15 @@
 <div style="display: flex">
     <form method="post" style="margin-right: 12px; border-right: 1px solid #ccc; padding-right: 12px;">
     {% if paused %}
-        <button type="submit" formaction="unpause">Unpause</button>
+        <button class=btn-primary type="submit" formaction="unpause">Unpause</button>
     {% else %}
-        <button type="submit" formaction="pause">Pause</button>
+        <button class=btn-primary type="submit" formaction="pause">Pause</button>
     {% endif %}
     </form>
 
     <form action="location/add" method="post">
         <input name="url" type="url" placeholder="URL">
-        <button type="submit">Add Seed</button>
+        <button class=btn type="submit">Add Seed</button>
     </form>
 </div>
 

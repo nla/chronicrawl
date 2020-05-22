@@ -47,7 +47,7 @@ public class ScheduleTest {
         Locale.setDefault(Locale.US);
         try {
             Schedule at9amAnd3pmWedAndFriday = new Schedule(0, "", 0, 0, 0, 1 << 4 | 1 << 2, (1 << 9) | (1 << 15));
-            assertEquals("on Wednesday, Friday at 9:00, 15:00", at9amAnd3pmWedAndFriday.summary());
+            assertEquals("on Wednesday, Friday at 9am, 3pm", at9amAnd3pmWedAndFriday.summary());
         } finally {
             Locale.setDefault(savedLocale);
         }

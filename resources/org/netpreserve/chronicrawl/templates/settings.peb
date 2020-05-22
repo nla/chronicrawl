@@ -8,7 +8,8 @@
     {% for schedule in schedules %}
         <tr><td><a href="settings/schedule?id={{ schedule.id }}">{{ schedule.name }}</a> </td><td>{{ schedule.summary }}</td></tr>
     {% endfor %}
-    <tr><td><a href="settings/schedule?new">[New]</a></td></tr>
 </table>
+
+<p><a href="settings/schedule?new" class=btn-primary>New Schedule</a>
 
 {% endblock %}

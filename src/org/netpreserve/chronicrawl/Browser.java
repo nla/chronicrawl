@@ -1,9 +1,6 @@
 package org.netpreserve.chronicrawl;
 
-import com.grack.nanojson.JsonObject;
-import com.grack.nanojson.JsonParser;
-import com.grack.nanojson.JsonParserException;
-import com.grack.nanojson.JsonWriter;
+import com.grack.nanojson.*;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.slf4j.Logger;
@@ -126,10 +123,12 @@ public class Browser implements Closeable {
 
     JsonObject call(String sessionId, String method, Map<String, Object> params) {
         long id = idSeq.incrementAndGet();
-        String message = JsonWriter.string().object()
-                .value("id", id)
-                .value("sessionId", sessionId)
-                .value("method", method)
+        JsonStringWriter writer = JsonWriter.string().object()
+                .value("id", id);
+        if (sessionId != null) {
+            writer.value("sessionId", sessionId);
+        }
+        String message = writer.value("method", method)
                 .object("params", params)
                 .end()
                 .done();

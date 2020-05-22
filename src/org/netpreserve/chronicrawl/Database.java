@@ -238,24 +238,25 @@ public class Database implements AutoCloseable {
                     "WHERE origin_id = ?").params(originId).listResult(Rule::new);
         }
 
-        public void insert(long id, long originId, String pathRegex, Long scheduleId) {
-            query.update("INSERT INTO rule (id, origin_id, path_regex, schedule_id) VALUES (?, ?, ?, ?)")
-                    .params(id, originId, pathRegex, scheduleId).run();
+        public void insert(long originId, String pattern, Long scheduleId) {
+            query.update("INSERT INTO rule (origin_id, pattern, schedule_id) VALUES (?, ?, ?)")
+                    .params(originId, pattern, scheduleId).run();
         }
 
-        public void update(Long id, long originId, String pathRegex, Long scheduleId) {
-            check(query.update("UPDATE rule SET origin_id = ?, path_regex = ?, schedule_id = ? WHERE id = ?")
-                    .params(originId, pathRegex, scheduleId, id).run());
+        public void update(long originId, String oldPattern, String newPattern, Long scheduleId) {
+            check(query.update("UPDATE rule SET pattern = ?, schedule_id = ? WHERE origin_id = ? AND pattern = ?")
+                    .params(newPattern, scheduleId, originId, oldPattern).run());
         }
 
-        public Rule find(long id) {
+        public Rule find(long originId, String pattern) {
             return query.select("SELECT rule.*, schedule.name AS schedule_name FROM rule " +
                     "LEFT JOIN schedule ON schedule.id = rule.schedule_id " +
-                    "WHERE rule.id = ?").params(id).singleResult(Rule::new);
+                    "WHERE rule.origin_id = ? AND rule.pattern = ?").params(originId, pattern).firstResult(Rule::new)
+                    .orElse(null);
         }
 
-        public void delete(long id) {
-            check(query.update("DELETE FROM rule WHERE id = ?").params(id).run());
+        public void delete(long originId, String pattern) {
+            check(query.update("DELETE FROM rule WHERE origin_id = ? AND pattern = ?").params(originId, pattern).run());
         }
     }
 

@@ -183,10 +183,10 @@ VALUES (0, 'Daily', 0, 0, 1, 0, 0),
 
 CREATE TABLE rule
 (
-    id          BIGINT       NOT NULL PRIMARY KEY,
     origin_id   BIGINT       NOT NULL,
-    path_regex  VARCHAR(512) NOT NULL,
+    pattern     VARCHAR(512) NOT NULL,
     schedule_id BIGINT       NULL,
+    PRIMARY KEY (origin_id, pattern),
     FOREIGN KEY (origin_id) REFERENCES origin ON DELETE CASCADE,
     FOREIGN KEY (schedule_id) REFERENCES schedule
 );

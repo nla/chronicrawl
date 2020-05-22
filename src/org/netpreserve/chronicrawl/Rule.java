@@ -1,5 +1,7 @@
 package org.netpreserve.chronicrawl;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -7,36 +9,40 @@ import java.util.List;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 public class Rule {
-    public final long id;
     public final long originId;
-    public final String pathRegex;
-    public final Pattern pathRegexCompiled;
+    public final String pattern;
+    public final Pattern regex;
     public final Long scheduleId;
     public final String scheduleName;
 
     public Rule(ResultSet rs) throws SQLException {
-        id = rs.getLong("id");
         originId = rs.getLong("origin_id");
-        pathRegex = rs.getString("path_regex");
-        pathRegexCompiled = Pattern.compile(pathRegex);
+        pattern = rs.getString("pattern");
+        regex = Pattern.compile(pattern);
         scheduleId = Database.getLongOrNull(rs, "schedule_id");
         scheduleName = rs.getString("schedule_name");
     }
 
     public boolean matches(String pathref) {
-        return pathRegexCompiled.matcher(pathref).matches();
+        return regex.matcher(pathref).matches();
     }
 
     public static Rule bestMatching(List<Rule> rules, Location location) {
         Rule best = null;
         String pathref = location.url.pathref();
         for (Rule rule : rules) {
-            if (rule.matches(pathref) && (best == null || best.pathRegex.length() < rule.pathRegex.length())) {
+            if (rule.matches(pathref) && (best == null || best.pattern.length() < rule.pattern.length())) {
                 best = rule;
             }
         }
         return best;
+    }
+
+    public String href() {
+        return "rule?o=" + originId + "&p=" + URLEncoder.encode(pattern, UTF_8);
     }
 
     public static void reapplyRulesToOrigin(Database db, long originId) {

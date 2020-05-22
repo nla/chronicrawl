@@ -24,14 +24,14 @@
             </td></tr>
         <tr><th>Robots crawl delay:</th><td>{{ origin.robotsCrawlDelay }}</td></tr>
     </table>
-</form>
+</form>`
 
 <p>
 <div>
     <h3>Rules</h3>
     <table>
         {% for rule in rules %}
-            <tr><td><a href="rule?id={{ rule.id }}">{{ rule.pathRegex }}</a></td><td>{{ rule.scheduleName | default("") }}</td></tr>
+            <tr><td><a href="{{ rule.href }}">{{ rule.pattern }}</a></td><td>{{ rule.scheduleName | default("") }}</td></tr>
         {% endfor %}
     </table>
     <p><a href="rule?o={{ origin.id }}" class=btn-primary>New Rule</a></p>

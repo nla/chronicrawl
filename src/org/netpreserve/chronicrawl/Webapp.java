@@ -293,38 +293,29 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 }
                 case "GET /rule": {
                     requireRole("admin");
-                    Long id = paramLong("id", null);
-                    Rule rule;
-                    long originId;
-                    if (id == null) {
-                        rule = null;
-                        originId = paramLong("o");
-                    } else {
-                        rule = db.rules.find(id);
-                        originId = rule.originId;
-                    }
+                    long originId = paramLong("o");
+                    String pattern = param("p", null);
+                    Rule rule = pattern == null ? null : db.rules.find(originId, pattern);
                     return render(View.rule, "schedules", db.schedules.list(),
-                            "rule", rule,
-                            "originId", originId);
+                            "rule", rule, "originId", originId, "pattern", pattern);
                 }
                 case "POST /rule": {
                     requireRole("admin");
                     long originId = paramLong("o");
-                    Long id = paramLong("id", null);
-                    if (id == null) {
-                        db.rules.insert(db.ids.next(), originId, param("pathRegex"), paramLong("scheduleId", null));
+                    String p = param("p", null);
+                    String action;
+                    if (request.getParameters().containsKey("delete")) {
+                        db.rules.delete(originId, p);
+                        action = "deleted";
+                    } else if (p == null || db.rules.find(originId, p) == null) {
+                        db.rules.insert(originId, param("pattern"), paramLong("scheduleId", null));
+                        action = "created";
                     } else {
-                        db.rules.update(id, originId, param("pathRegex"), paramLong("scheduleId", null));
+                        db.rules.update(originId, p, param("pattern"), paramLong("scheduleId", null));
+                        action = "updated";
                     }
                     Rule.reapplyRulesToOrigin(db, originId);
-                    return seeOther(contextPath + "/origin?id=" + originId, "Rule saved.");
-                }
-                case "POST /rule/delete": {
-                    requireRole("admin");
-                    long originId = paramLong("o");
-                    db.rules.delete(paramLong("id", null));
-                    Rule.reapplyRulesToOrigin(db, originId);
-                    return seeOther(contextPath + "/origin?id=" + originId, "Rule deleted.");
+                    return seeOther(contextPath + "/origin?id=" + originId, "Rule " + param("pattern") + " " + action + ".");
                 }
                 case "GET /search": {
                     requireRole("admin");

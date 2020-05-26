@@ -10,12 +10,12 @@
     <tr><th>Last visit:</th><td>{{ location.lastVisit | default("") }}</td></tr>
     <tr><th>Next visit:</th><td>{{ location.nextVisit | default("") }}</td></tr>
 </table>
-
+<p>
 <nav>
     <form action="location/visit-now" method=post>
         <input name=o value="{{ location.originId }}" type=hidden>
         <input name=p value="{{ location.pathId }}" type=hidden>
-        <button type=submit>Visit Now</button>
+        <button type=submit class=btn>Visit Now</button>
     </form>
 </nav>
 

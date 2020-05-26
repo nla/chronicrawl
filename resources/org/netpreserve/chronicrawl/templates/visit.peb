@@ -18,9 +18,11 @@
     </tr>
 </table>
 
+<p>
+
 <nav>
     {% if replayUrl is not null %}<a href="{{ replayUrl }}" class="button">Replay</a>{% endif %}
-    <a href="analyse?o={{ visit.originId }}&p={{ visit.pathId }}&d={{ visit.date.toEpochMilli }}" class="button">Analyse</a>
+    <a href="analyse?o={{ visit.originId }}&p={{ visit.pathId }}&d={{ visit.date.toEpochMilli }}" class="btn">Analyse</a>
 </nav>
 
 {% endblock %}

@@ -7,13 +7,14 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-public class AnalyserClassicTest {
+public class AnalysisTest {
     @Test
     public void test() throws IOException {
         Analysis analysis = new Analysis(null, null);
-        new AnalyserClassic(analysis).parseHtml(new ByteArrayInputStream(("<title>title1</title><img src=foo.jpg><style>" +
+        analysis.parseHtml(new ByteArrayInputStream(("<title>title1</title><img src=foo.jpg><style>" +
                 "@font-face { font-family: somefont; src: url(font.woff);}" +
                 "body { background: url(bg.jpg);  }</style><script src=script.js></script><title>title2</title>").getBytes()), null, "http://localhost/");
         var set = new HashSet<String>();

@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -21,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.WRITE;
@@ -147,26 +145,35 @@ public class Storage implements Closeable {
 
     WarcResponse readResponseHeader(Visit visit) throws IOException {
         var tmp = new WarcResponse[1];
-        readResponse(visit, response -> tmp[0] = response);
+        readResponse(visit, (record, response) -> tmp[0] = response);
         return tmp[0];
     }
 
-    void readResponse(Visit visit, Util.IOConsumer<WarcResponse> consumer) throws IOException {
-        readRecord(consumer, visit.warcId, visit.responsePosition);
-    }
-
-    private void readRecord(Util.IOConsumer<WarcResponse> consumer, UUID warcId, long position) throws IOException {
-        String path = db.warcs.findPath(warcId);
-        if (path == null) throw new NoSuchFileException("warc " + warcId.toString());
+    void readResponse(Visit visit, ResponseConsumer consumer) throws IOException {
+        String path = db.warcs.findPath(visit.warcId);
+        if (path == null) throw new NoSuchFileException("warc " + visit.warcId.toString());
         try (FileChannel channel = FileChannel.open(Paths.get(path))) {
-            channel.position(position);
+            channel.position(visit.responsePosition);
             try (WarcReader warcReader = new WarcReader(channel)) {
                 WarcRecord record = warcReader.next().orElse(null);
                 if (record == null) throw new IOException("Record was missing");
-                if (!(record instanceof WarcResponse)) throw new IOException(record.id() + " is a " + record.type() + " record not response");
-                consumer.accept((WarcResponse) record);
+                if (record instanceof WarcRevisit) {
+                    WarcRevisit revisit = (WarcRevisit) record;
+                    Url url = new Url(revisit.refersToTargetURI().orElseThrow(IOException::new).toString());
+                    Visit visit1 = db.visits.find(url.originId(), url.pathId(), revisit.refersToDate().orElseThrow());
+                    if (visit1 == null) throw new IOException("Revisit refers to missing record");
+                    readResponse(visit1, (r, rs) -> consumer.accept(revisit, rs));
+                } else if (record instanceof WarcResponse) {
+                    consumer.accept((WarcResponse) record, (WarcResponse) record);
+                } else {
+                    throw new IOException(record.id() + " is a " + record.type() + " record not response or revisit");
+                }
             }
         }
+    }
+
+    public interface ResponseConsumer {
+        void accept(WarcTargetRecord record, WarcResponse response) throws IOException;
     }
 
     static byte[] readHeaderOnly(ReadableByteChannel channel) throws IOException {

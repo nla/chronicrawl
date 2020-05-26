@@ -106,7 +106,7 @@ public class Exchange implements Closeable {
             prevVisit = crawl.db.visits.findClosest(location.originId, location.pathId, date, method);
             if (prevVisit != null) {
                 try {
-                    crawl.storage.readResponse(prevVisit, response -> {
+                    crawl.storage.readResponse(prevVisit, (record, response) -> {
                         prevResponseId = response.id();
                         var headers = response.http().headers();
                         headers.first("ETag").ifPresent(s -> builder.addHeader("If-None-Match", s));

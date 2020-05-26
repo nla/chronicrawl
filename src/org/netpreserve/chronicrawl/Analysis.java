@@ -9,6 +9,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.select.NodeVisitor;
 import org.netpreserve.jwarc.WarcResponse;
+import org.netpreserve.jwarc.WarcTargetRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.css.sac.*;
@@ -157,7 +158,7 @@ public class Analysis {
             if (subvisit.status < 0) {
                 request.fail("Failed");
             } else {
-                crawl.storage.readResponse(subvisit, request::fulfill);
+                crawl.storage.readResponse(subvisit, (rec, rsp) -> request.fulfill(rsp));
             }
         } catch (IOException e) {
             request.fail("Failed");
@@ -282,8 +283,9 @@ public class Analysis {
         }
     }
 
-    public void parseHtml(WarcResponse response) throws IOException {
-        parseHtml(response.http().body().stream(), response.http().contentType().parameters().get("charset"), response.target());
+    public void parseHtml(WarcTargetRecord record, WarcResponse response) throws IOException {
+        parseHtml(response.http().body().stream(), response.http().contentType().parameters().get("charset"),
+                record.target());
     }
 
     private class StyleHandler extends HandlerBase {

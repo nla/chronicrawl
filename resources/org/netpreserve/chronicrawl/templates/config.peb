@@ -1,0 +1,36 @@
+{% extends "./layout.peb" %}
+
+{% block content %}
+<h2>System Configuration</h2>
+
+<form name=configForm method=post>
+    <table>
+        {% for entry in config %}
+            <tr>
+                <td>{{ entry.name }}</td>
+                <td>
+                    <input class=config-set name=set value={{ entry.name }} type=checkbox
+                        {% if dbConfig.containsKey(entry.name) %}checked{% endif %}>
+                    <input name={{ entry.name }} value="{{ dbConfig.get(entry.name) | default('')}}"
+                           data-default="{{ entry.defaultValue | default("") }}" size=60>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+    <script>
+        document.querySelectorAll(".config-set").forEach(checkbox => {
+            checkbox.onchange = function () {
+                var textbox = this.form[this.value];
+                if (!this.checked) textbox.value = textbox.dataset.default;
+                textbox.disabled = !this.checked
+            };
+            checkbox.onchange()
+        });
+    </script>
+    <p>
+    <nav>
+        <button type=submit class=btn-primary>Save</button>
+        <a href=settings class=btn>Cancel</a>
+    </nav>
+</form>
+{% endblock %}

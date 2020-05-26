@@ -25,6 +25,7 @@ public class Database implements AutoCloseable {
     private final HikariDataSource dataSource;
     final Query query;
     public final IdGenerator ids = new IdGenerator(0); // TODO: claim unique nodeId
+    public final ConfigDAO config = new ConfigDAO();
     public final LocationDAO locations = new LocationDAO();
     public final OriginDAO origins = new OriginDAO();
     public final RuleDAO rules = new RuleDAO();
@@ -103,6 +104,25 @@ public class Database implements AutoCloseable {
     @Override
     public void close() {
         dataSource.close();
+    }
+
+    public class ConfigDAO {
+        public HashMap<String, String> getAll() {
+            var map = new HashMap<String, String>();
+            query.select("SELECT name, value FROM config")
+                    .iterateResult(rs -> map.put(rs.getString("name"), rs.getString("value")));
+            return map;
+        }
+
+        public void insert(String name, String value) {
+            query.update("INSERT INTO config (name, value) VALUES (?, ?)")
+                    .params(name, value)
+                    .run();
+        }
+
+        public void deleteAll() {
+            query.update("DELETE FROM config").run();
+        }
     }
 
     public class OriginDAO {

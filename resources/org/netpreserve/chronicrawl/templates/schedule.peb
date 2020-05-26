@@ -42,7 +42,7 @@
     <p>
     <div class=actions>
         <button class=btn-primary type=submit>Save</button>
-        <a href=settings class=btn>Cancel</a>
+        <a href=settings/schedules class=btn>Cancel</a>
         {% if schedule is not null %}
             <button class=btn-delete type=submit
                     formaction="settings/schedule/delete?id={{ schedule.id }}"

@@ -2,14 +2,8 @@
 
 {% block content %}
 <h2>Settings</h2>
-
-<h3>Schedule Definition</h3>
-<table>
-    {% for schedule in schedules %}
-        <tr><td><a href="settings/schedule?id={{ schedule.id }}">{{ schedule.name }}</a> </td><td>{{ schedule.summary }}</td></tr>
-    {% endfor %}
-</table>
-
-<p><a href="settings/schedule?new" class=btn-primary>New Schedule</a>
-
+<ul>
+    <li><a href=settings/config>System Configuration</a></li>
+    <li><a href=settings/schedules>Schedule Definitions</a></li>
+</ul>
 {% endblock %}

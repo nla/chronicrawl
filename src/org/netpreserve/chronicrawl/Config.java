@@ -7,6 +7,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
@@ -14,15 +15,15 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Config {
+public class Config implements Iterable<Config.Entry> {
     private static final Logger log = LoggerFactory.getLogger(Config.class);
+    private static final Set<String> hiddenFields = Set.of("dbUrl", "dbUser", "dbPassword");
+    private static final Config defaults = new Config();
 
     /**
      * JDBC URL of database
@@ -205,6 +206,14 @@ public class Config {
         }
     }
 
+    public void set(String name, String value) {
+        try {
+            set(getClass().getDeclaredField(name), value);
+        } catch (NoSuchFieldException e) {
+            throw new IllegalArgumentException("No such field: " + name);
+        }
+    }
+
     private void set(Field field, String value) {
         try {
             if (field.getType().equals(Integer.TYPE)) {
@@ -232,6 +241,41 @@ public class Config {
             }
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public Iterator<Entry> iterator() {
+        return Arrays.stream(getClass().getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()) && !hiddenFields.contains(field.getName()))
+                .map(Entry::new).iterator();
+    }
+
+    public class Entry {
+        private final Field field;
+
+        Entry(Field field) {
+            this.field = field;
+        }
+
+        public String name() {
+            return field.getName();
+        }
+
+        public String value() {
+            try {
+                return Objects.toString(field.get(Config.this), null);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public String defaultValue() {
+            try {
+                return Objects.toString(field.get(defaults), null);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 }

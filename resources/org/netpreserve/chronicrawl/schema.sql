@@ -190,3 +190,9 @@ CREATE TABLE rule
     FOREIGN KEY (origin_id) REFERENCES origin ON DELETE CASCADE,
     FOREIGN KEY (schedule_id) REFERENCES schedule
 );
+
+CREATE TABLE config
+(
+    name VARCHAR(128) NOT NULL PRIMARY KEY,
+    value VARCHAR(4096)
+);

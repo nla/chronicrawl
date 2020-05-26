@@ -328,13 +328,36 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 }
                 case "GET /settings": {
                     requireRole("admin");
-                    return render(View.settings, "schedules", db.schedules.list());
+                    return render(View.settings);
+                }
+                case "GET /settings/config": {
+                    requireRole("admin");
+                    return render(View.config, "config", crawl.config, "dbConfig", db.config.getAll());
+                }
+                case "POST /settings/config": {
+                    requireRole("admin");
+                    Config testConfig = new Config();
+                    for (String name : request.getParameters().getOrDefault("set", List.of())) {
+                        testConfig.set(name, param(name));
+                    }
+                    db.query.transaction().inNoResult(() -> {
+                        db.config.deleteAll();
+                        for (String name : request.getParameters().getOrDefault("set", List.of())) {
+                            db.config.insert(name, param(name));
+                        }
+                    });
+                    crawl.config.load(db.config.getAll());
+                    return seeOther(contextPath + "/settings", "Config updated.");
+                }
+                case "GET /settings/schedules": {
+                    requireRole("admin");
+                    return render(View.schedules, "schedules", db.schedules.list());
                 }
                 case "GET /settings/schedule": {
                     requireRole("admin");
                     Long id = paramLong("id", null);
                     Schedule schedule = id == null ? null : db.schedules.find(id);
-                    return render(View.settingsSchedule, "schedule", schedule,
+                    return render(View.schedule, "schedule", schedule,
                             "dayNames", Schedule.dayNames(),
                             "hourNames", Schedule.hourNames());
                 }
@@ -352,12 +375,12 @@ public class Webapp extends NanoHTTPD implements Closeable {
                                 toBits(request.getParameters().get("dayOfWeek")),
                                 toBits(request.getParameters().get("hourOfDay")));
                     }
-                    return seeOther(contextPath + "/settings", "Schedule saved.");
+                    return seeOther(contextPath + "/settings/schedules", "Schedule saved.");
                 }
                 case "POST /settings/schedule/delete": {
                     requireRole("admin");
                     db.schedules.delete(paramLong("id"));
-                    return seeOther(contextPath + "/settings", "Schedule deleted.");
+                    return seeOther(contextPath + "/settings/schedules", "Schedule deleted.");
                 }
                 case "GET /visit":
                     requireRole("admin");
@@ -543,7 +566,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
     }
 
     private enum View {
-        home, location, log, origin, visit, analyse, searchNoResults, queue, debug, settingsSchedule, settings, rule;
+        home, location, log, origin, visit, analyse, searchNoResults, queue, debug, schedule, schedules, settings, rule, config;
 
         private final PebbleTemplate template;
 

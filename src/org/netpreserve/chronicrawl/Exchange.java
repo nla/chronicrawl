@@ -30,7 +30,7 @@ import static java.nio.file.StandardOpenOption.*;
 
 public class Exchange implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
-    private static Set<String> IGNORED_EXTRA_HEADERS = Set.of(
+    private static final Set<String> IGNORED_EXTRA_HEADERS = Set.of(
             "content-length", "connection", "transfer-encoding", "host", "user-agent", "if-none-match",
             "if-modified-since", "referer", "te", "keep-alive", "proxy-authenticate", "proxy-authorization",
             "ugprade-insecure-requests", "accept-encoding"
@@ -58,7 +58,7 @@ public class Exchange implements Closeable {
     int fetchStatus;
     UUID responseId;
     byte[] digest;
-    private Analysis analysis;
+    Analysis analysis;
     Visit prevVisit;
     URI prevResponseId;
     long contentLength;
@@ -159,7 +159,7 @@ public class Exchange implements Closeable {
         }
     }
 
-    private void process() throws IOException {
+    private void process() {
         try {
             bufferFile.position(0);
             httpResponse = HttpResponse.parse(bufferFile);

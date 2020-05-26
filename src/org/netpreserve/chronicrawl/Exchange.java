@@ -184,19 +184,13 @@ public class Exchange implements Closeable {
     }
 
     private void processPage() throws IOException {
-        Visit visit = crawl.db.visits.find(location.originId, location.pathId, date);
-        this.analysis = new Analysis(location, date);
-        crawl.storage.readResponse(visit, response -> new AnalyserClassic(analysis).parseHtml(response));
+        this.analysis = new Analysis(crawl, location, date, true);
         for (var resource : analysis.resources()) {
             crawl.enqueue(location, date, resource.url, Location.Type.TRANSCLUSION);
-        }
-        if (analysis.hasScript) {
-            new AnalyserBrowser(crawl, analysis, true);
         }
         for (Url link : analysis.links()) {
             crawl.enqueue(location, date, link, Location.Type.PAGE);
         }
-
         if (analysis.screenshot != null) {
             crawl.db.screenshotCache.expire(100);
             crawl.db.screenshotCache.insert(url, date, analysis.screenshot);

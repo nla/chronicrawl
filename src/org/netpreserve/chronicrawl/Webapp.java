@@ -144,14 +144,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     long originId = paramLong("o");
                     long pathId = paramLong("p");
                     Instant date = Instant.ofEpochMilli(paramLong("d"));
-                    var visit = db.visits.find(originId, pathId, date);
                     var location = db.locations.find(originId, pathId);
-                    var analysis = new Analysis(location, visit.date);
-                    crawl.storage.readResponse(visit, response -> new AnalyserClassic(analysis)
-                            .parseHtml(response));
-                    if (analysis.hasScript) {
-                        new AnalyserBrowser(crawl, analysis, request.getParameters().containsKey("recordMode"));
-                    }
+                    var analysis = new Analysis(crawl, location, date, request.getParameters().containsKey("recordMode"));
                     for (var resource : analysis.resources()) {
                         if (resource.visit == null) {
                             resource.visit = db.visits.findClosest(resource.url.originId(), resource.url.pathId(), analysis.visitDate, resource.method);

@@ -22,7 +22,8 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 public class Browser implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Browser.class);
-    private static final List<String> executables = List.of("chromium-browser", "chromium", "google-chrome");
+    private static final List<String> executables = List.of("chromium-browser", "chromium", "google-chrome",
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe");
     private final Process process;
     private final WebSocket websocket;
     private final AtomicLong idSeq = new AtomicLong(0);

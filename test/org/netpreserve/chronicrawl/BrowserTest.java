@@ -19,7 +19,7 @@ public class BrowserTest {
     public void test() throws IOException, InterruptedException, ExecutionException {
         try (TestServer server = new TestServer();
              Browser browser = assumeNewBrowser();
-             BrowserTab tab = browser.createTab()) {
+             Browser.Tab tab = browser.createTab()) {
 
             var requested = new ConcurrentSkipListSet<>();
             tab.overrideDateAndRandom(Instant.ofEpochSecond(1234567890));

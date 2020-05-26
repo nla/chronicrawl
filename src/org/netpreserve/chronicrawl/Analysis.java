@@ -100,7 +100,7 @@ public class Analysis {
     }
 
     void browse(Crawl crawl, boolean recordMode) {
-        try (BrowserTab tab = crawl.browser.createTab()) {
+        try (Browser.Tab tab = crawl.browser.createTab()) {
             if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(visitDate);
             tab.interceptRequests(request -> onRequestIntercepted(request, crawl, recordMode));
             try {
@@ -123,7 +123,7 @@ public class Analysis {
         }
     }
 
-    private void onRequestIntercepted(BrowserRequest request, Crawl crawl, boolean recordMode) {
+    private void onRequestIntercepted(Browser.Request request, Crawl crawl, boolean recordMode) {
         try {
             Url subUrl = new Url(request.url());
             Visit subvisit = crawl.db.visits.findClosest(subUrl.originId(), subUrl.pathId(), visitDate, request.method());

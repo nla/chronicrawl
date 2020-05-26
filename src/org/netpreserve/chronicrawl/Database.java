@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.*;
 
 import static java.util.Objects.requireNonNull;
+import static org.codejargon.fluentjdbc.api.mapper.Mappers.singleString;
 
 public class Database implements AutoCloseable {
     private final HikariDataSource dataSource;
@@ -143,7 +144,7 @@ public class Database implements AutoCloseable {
         }
 
         private Optional<String> findOrigin(long id) {
-            return query.select("SELECT origin FROM origin WHERE id = ?").params(id).firstResult(Mappers.singleString());
+            return query.select("SELECT origin FROM origin WHERE id = ?").params(id).firstResult(singleString());
         }
 
         public boolean tryInsert(long id, String name, Instant discovered, CrawlPolicy crawlPolicy) {
@@ -221,7 +222,7 @@ public class Database implements AutoCloseable {
         }
 
         private Optional<String> findPath(Url url) {
-            return query.select("SELECT path FROM location WHERE origin_id = ? AND path_id = ?").params(url.originId(), url.pathId()).firstResult(Mappers.singleString());
+            return query.select("SELECT path FROM location WHERE origin_id = ? AND path_id = ?").params(url.originId(), url.pathId()).firstResult(singleString());
         }
 
         public Location peek(long originId) {
@@ -311,6 +312,12 @@ public class Database implements AutoCloseable {
             query.update("DELETE FROM sitemap_entry WHERE origin_id = ? AND path_id = ?").params(url.originId(), url.pathId()).run();
             check(query.update("INSERT INTO sitemap_entry (origin_id, path_id, sitemap_origin_id, sitemap_path_id, changefreq, priority, lastmod) VALUES (?, ?, ?, ?, ?, ?, ?)")
                     .params(url.originId(), url.pathId(), sitemapUrl.originId(), sitemapUrl.pathId(), changeFreq, priority, lastmod).run());
+        }
+
+        public String findChangefreq(long originId, long pathId) {
+            return query.select("SELECT changefreq FROM sitemap_entry WHERE origin_id = ? AND path_id = ? LIMIT 1")
+                    .params(originId, pathId)
+                    .firstResult(singleString()).orElse(null);
         }
     }
 
@@ -471,7 +478,7 @@ public class Database implements AutoCloseable {
         }
 
         public String findPath(UUID id) {
-            return query.select("SELECT path FROM warc WHERE id = ?").params(toBytes(requireNonNull(id))).singleResult(Mappers.singleString());
+            return query.select("SELECT path FROM warc WHERE id = ?").params(toBytes(requireNonNull(id))).singleResult(singleString());
         }
     }
 

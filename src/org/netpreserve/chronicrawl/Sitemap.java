@@ -146,6 +146,24 @@ public class Sitemap {
         }
     }
 
+    public static Duration parseChangefreq(String changefreq) {
+        switch (changefreq.toLowerCase(Locale.ROOT)) {
+            case "always":
+            case "hourly":
+            case "daily":
+                return Duration.ofDays(1);
+            case "weekly":
+                return Duration.ofDays(7);
+            case "monthly":
+                return Duration.ofDays(29);
+            case "yearly":
+            case "never":
+                return Duration.ofDays(365);
+            default:
+                return null;
+        }
+    }
+
     public enum ChangeFreq {
         ALWAYS, HOURLY, DAILY, WEEKLY, MONTHLY, YEARLY, NEVER
     }

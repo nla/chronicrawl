@@ -223,19 +223,7 @@ public class Exchange implements Closeable {
         if (httpResponse != null) {
             contentType = httpResponse.contentType().base().toString();
         }
-
-        Instant nextVisit;
-        if (rule != null && rule.scheduleId != null) {
-            Schedule schedule = crawl.db.schedules.find(rule.scheduleId);
-            if (schedule != null) {
-                nextVisit = schedule.apply(date.atZone(ZoneId.systemDefault())).toInstant();
-            } else {
-                nextVisit = date.plus(Duration.ofDays(1));
-            }
-        } else {
-            nextVisit = date.plus(Duration.ofDays(1));
-        }
-
+        Instant nextVisit = calcNextVisit();
         crawl.db.query.transaction().inNoResult(() -> {
             crawl.db.origins.updateVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
             crawl.db.locations.updateVisitData(location.url.originId(), location.url.pathId(), date, nextVisit);
@@ -246,6 +234,47 @@ public class Exchange implements Closeable {
         System.out.flush();
 
     }
+
+    private Instant calcNextVisit() {
+        // if there's a schedule applied, follow it
+        if (rule != null && rule.scheduleId != null) {
+            Schedule schedule = crawl.db.schedules.find(rule.scheduleId);
+            if (schedule != null) {
+                return schedule.apply(date.atZone(ZoneId.systemDefault())).toInstant();
+            }
+        }
+
+        // if the sitemap tells us then follow it
+        String changefreq = crawl.db.sitemapEntries.findChangefreq(location.originId, location.pathId);
+        if (changefreq != null) {
+            Duration nextDuration = Sitemap.parseChangefreq(changefreq);
+            if (nextDuration != null) {
+                return date.plus(nextDuration);
+            }
+        }
+
+        // if we've visited before adapt based on whether the content changed
+        Duration minDuration = Duration.ofDays(1);
+        Duration maxDuration = Duration.ofDays(365);
+        if (location.lastVisit != null) {
+            Duration duration = Duration.between(location.lastVisit, date);
+            Duration nextDuration;
+            if (revisitOf != null) { // content changed, revisit more frequently
+                nextDuration = duration.dividedBy(2);
+            } else { // content same, revisit less frequently
+                nextDuration = duration.multipliedBy(2);
+            }
+            if (nextDuration.compareTo(minDuration) < 0) {
+                nextDuration = minDuration;
+            } else if (nextDuration.compareTo(maxDuration) > 0) {
+                nextDuration = maxDuration;
+            }
+            return date.plus(nextDuration);
+        }
+
+        // if we know nothing start off by revisiting frequently
+        return date.plus(minDuration);
+     }
 
     private long calcDelayMillis() {
         if (fetchStatus == Status.ROBOTS_DISALLOWED) return 0;

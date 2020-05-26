@@ -30,9 +30,9 @@ public class Analysis {
     private static final Logger log = LoggerFactory.getLogger(Analysis.class);
     private static final Pattern SRCSET = Pattern.compile("[\\s,]*(\\S*[^,\\s])(?:\\s(?:[^,(]+|\\([^)]*(?:\\)|$))*)?", Pattern.MULTILINE);
     private static final Pattern META_REFRESH = Pattern.compile("\\d+\\s*;\\s*url=['\"]?(.*?)['\"]?");
-    private static boolean extraAttrs = true;
+    private static final boolean extraAttrs = true;
 
-    private final Map<String, Resource> resourceMap = new ConcurrentSkipListMap<String, Resource>();
+    private final Map<String, Resource> resourceMap = new ConcurrentSkipListMap<>();
     private final Set<Url> links = new ConcurrentSkipListSet<>();
     public Location location;
     public final Instant visitDate;
@@ -46,6 +46,7 @@ public class Analysis {
     }
 
     public Analysis(Crawl crawl, Location location, Instant date, boolean recordMode) throws IOException {
+        this.location = location;
         visitDate = date;
         Visit visit = crawl.db.visits.find(location.originId, location.pathId, date);
         crawl.storage.readResponse(visit, this::parseHtml);
@@ -78,6 +79,7 @@ public class Analysis {
         return Util.makeJpegDataUrl(screenshot);
     }
 
+    @SuppressWarnings("unused")
     public enum ResourceType {
         Document, Stylesheet, Image, Media, Font, Script, TextTrack, XHR, Fetch, EventSource, WebSocket, Manifest,
         SignedExchange, Ping, CSPViolationReport, Other

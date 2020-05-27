@@ -372,7 +372,8 @@ public class Database implements AutoCloseable {
                     "LEFT JOIN location l ON l.origin_id = v.origin_id AND l.path_id = v.path_id " +
                     "LEFT JOIN origin o ON o.id = l.origin_id " +
                     "LEFT JOIN content_type ct ON ct.id = v.content_type_id " +
-                    "WHERE v.origin_id = ? AND v.path_id = ? AND v.method_id = (SELECT id FROM method WHERE method = 'GET') " +
+                    "WHERE v.origin_id = ? AND v.path_id = ? AND " +
+                    "v.method_id = (SELECT id FROM method WHERE method = 'GET') AND v.status > 0 AND v.status <> 304 " +
                     "AND v.response_payload_digest IS NOT NULL AND v.warc_id IS NOT NULL " +
                     "LIMIT 1000").params(originId, pathId)
                     .listResult(CdxLine::new);

@@ -45,6 +45,9 @@ public class Crawl implements Closeable {
     }
 
     void enqueue(Location via, Instant date, Url targetUrl, Location.Type type) {
+        int depth = via.depth + 1;
+        if (depth > config.maxDepth) return;
+
         if (db.origins.tryInsert(targetUrl.originId(), targetUrl.origin(), date, CrawlPolicy.TRANSCLUSIONS)) {
             if (type == Location.Type.PAGE) {
 //                db.locations.tryInsert(targetUrl.resolve("/robots.txt"), Location.Type.ROBOTS, targetUrl.id(), date, 1);

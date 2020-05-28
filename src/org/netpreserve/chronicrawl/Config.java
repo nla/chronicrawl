@@ -86,6 +86,11 @@ public class Config implements Iterable<Config.Entry> {
     long maxDelayMillis = 30;
 
     /**
+     * Maximum depth when following links
+     */
+    int maxDepth = 10;
+
+    /**
      * Digest algorithm to use when calculating payload digest
      */
     String warcDigestAlgorithm = "sha1";

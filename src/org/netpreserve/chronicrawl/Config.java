@@ -6,6 +6,10 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.net.InetAddress;
@@ -19,6 +23,9 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.StreamSupport;
+
+import static java.util.stream.Collectors.groupingBy;
 
 public class Config implements Iterable<Config.Entry> {
     private static final Logger log = LoggerFactory.getLogger(Config.class);
@@ -285,6 +292,10 @@ public class Config implements Iterable<Config.Entry> {
                 .map(Entry::new).iterator();
     }
 
+    public Map<String,List<Entry>> sections() {
+        return new TreeMap<>(StreamSupport.stream(spliterator(), false).collect(groupingBy(Entry::section)));
+    }
+
     public class Entry {
         private final Field field;
 
@@ -311,8 +322,15 @@ public class Config implements Iterable<Config.Entry> {
                 throw new RuntimeException(e);
             }
         }
+
+        public String section() {
+            Section section = field.getAnnotation(Section.class);
+            return section == null ? "Other" : section.value();
+        }
     }
 
+    @Target({ElementType.FIELD})
+    @Retention(RetentionPolicy.RUNTIME)
     @interface Section {
         String value();
     }

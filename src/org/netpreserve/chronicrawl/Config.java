@@ -22,145 +22,171 @@ import java.util.regex.Pattern;
 
 public class Config implements Iterable<Config.Entry> {
     private static final Logger log = LoggerFactory.getLogger(Config.class);
-    private static final Set<String> hiddenFields = Set.of("dbUrl", "dbUser", "dbPassword");
     private static final Config defaults = new Config();
 
     /**
      * JDBC URL of database
      */
+    @Section("Database")
     String dbUrl = "jdbc:sqlite:data/chronicrawl.sqlite3";
 
     /**
      * Database username
      */
+    @Section("Database")
     String dbUser = "sa";
 
     /**
      * Database password
      */
+    @Section("Database")
     String dbPassword = "";
-
-    /**
-     * Bind address for the crawler (not the UI).
-     */
-    InetAddress bindAddress;
 
     /**
      * URL prefix for the UI.
      */
+    @Section("User Interface")
     public String uiContextPath = "";
 
     /**
      * Listening port of the web user interface
      */
+    @Section("User Interface")
     int uiPort = 8080;
 
     /**
      * Name of the session cookie used by the Web UI
      */
+    @Section("User Interface")
     String uiSessionCookie = "chronicrawlSessionId";
 
     /**
      * Seconds until the UI session expires
      */
+    @Section("User Interface")
     long uiSessionExpirySecs = TimeUnit.DAYS.toSeconds(30);
 
     /**
      * User-Agent header to send to the server
      */
+    @Section("Crawler")
     String userAgent = "Chronicrawl/" + version();
+
+    /**
+     * Bind address for the crawler (not the UI).
+     */
+    @Section("Crawler")
+    InetAddress bindAddress;
 
     /**
      * Maximum number of bytes to read from robots.txt
      */
+    @Section("Crawler")
     int maxRobotsBytes = 512 * 1024;
 
     /**
      * Ignore robots.txt
      */
+    @Section("Crawler")
     boolean ignoreRobots = false;
 
     /**
      * Maximum delay between requests
      */
+    @Section("Crawler")
     long maxDelayMillis = 30;
 
     /**
      * Maximum depth when following links
      */
+    @Section("Crawler")
     int maxDepth = 10;
+
+    /**
+     * Override Date and Math.random to try to make scripts more deterministic (beware: this currently freezes time and
+     * may break pages that expect time to advance)
+     */
+    @Section("Crawler")
+    boolean scriptDeterminism = true;
 
     /**
      * Digest algorithm to use when calculating payload digest
      */
+    @Section("Storage")
     String warcDigestAlgorithm = "sha1";
 
     /**
      * Template for construct WARC filenames. Variables: {TIMESTAMP} {SEQNO}
      */
+    @Section("Storage")
     String warcFilename = "data/trickler-{TIMESTAMP}-{SEQNO}.warc";
 
     /**
      * Format of the {TIMESTAMP} variable in warcFilename
      */
+    @Section("Storage")
     DateTimeFormatter warcTimestampFormat = DateTimeFormatter.ofPattern("uuuuMMddHHmmss").withZone(ZoneOffset.UTC);
 
     /**
      * Maximum length of a WARC file before a new one is created
      */
+    @Section("Storage")
     long warcMaxLengthBytes = 1024 * 1024 * 1024; // 1 GiB
 
     /**
      * Write revisit records by giving the server an etag or last-modified and it returns status 304
      */
+    @Section("Storage")
     boolean dedupeServer = true;
 
     /**
      * Write revisit records when the payload digest is unmodified
      */
+    @Section("Storage")
     boolean dedupeDigest = true;
 
     /**
      * URL of the auth server (realm) to enable OpenID Connect authentication
      */
+    @Section("User Interface")
     String oidcUrl;
 
     /**
      * OpenID Connect client id
      */
+    @Section("User Interface")
     String oidcClientId;
 
     /**
      * OpenID Connect client secret
      */
+    @Section("User Interface")
     String oidcClientSecret;
 
     /**
      * Command to run pywb for optional replay.
      */
+    @Section("User Interface")
     String pywb;
 
     /**
      * Port to run Pywb on.
      */
+    @Section("User Interface")
     int pywbPort = 8081;
 
     /**
      * Collection name to use when running Pywb.
      */
+    @Section("User Interface")
     String pywbCollection = "chronicrawl";
 
     /**
      * The URL prefix (including collection name) to use when linking to Pywb. This may be different to pywbPort when
      * using a reverse proxy or running pywb separately.
      */
+    @Section("User Interface")
     public String pywbUrl;
-
-    /**
-     * Override Date and Math.random to try to make scripts more deterministic (beware: this currently freezes time and
-     * may break pages that expect time to advance)
-     */
-    boolean scriptDeterminism = true;
 
     static String version() {
         InputStream stream = Config.class.getResourceAsStream("/META-INF/maven/org.netpreserve/chronicrawl/pom.properties");
@@ -252,7 +278,10 @@ public class Config implements Iterable<Config.Entry> {
     @Override
     public Iterator<Entry> iterator() {
         return Arrays.stream(getClass().getDeclaredFields())
-                .filter(field -> !Modifier.isStatic(field.getModifiers()) && !hiddenFields.contains(field.getName()))
+                .filter(field -> {
+                    Section section = field.getAnnotation(Section.class);
+                    return !Modifier.isStatic(field.getModifiers()) && (section == null || !section.value().equals("Database"));
+                })
                 .map(Entry::new).iterator();
     }
 
@@ -282,5 +311,9 @@ public class Config implements Iterable<Config.Entry> {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    @interface Section {
+        String value();
     }
 }

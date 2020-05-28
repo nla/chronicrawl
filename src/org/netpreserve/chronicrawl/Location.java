@@ -1,5 +1,7 @@
 package org.netpreserve.chronicrawl;
 
+import org.jdbi.v3.core.mapper.reflect.JdbiConstructor;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -16,17 +18,19 @@ public class Location {
     public final Instant lastVisit;
     public final Instant nextVisit;
 
-    public Location(ResultSet rs) throws SQLException {
-        originId = rs.getLong("origin_id");
-        pathId = rs.getLong("path_id");
-        url = new Url(rs.getString("origin") + rs.getString("path"));
-        type = Type.valueOf(rs.getString("location_type"));
-        depth = rs.getInt("depth");
-        viaOriginId = Database.getLongOrNull(rs, "via_origin_id");
-        viaPathId = Database.getLongOrNull(rs, "via_path_id");
-        discovered = Database.getInstant(rs, "discovered");
-        lastVisit = Database.getInstant(rs, "last_visit");
-        nextVisit = Database.getInstant(rs, "next_visit");
+    @JdbiConstructor
+    public Location(long originId, long pathId, String origin, String path, Type locationType, int depth, Long viaOriginId, Long viaPathId,
+                    Instant discovered, Instant lastVisit, Instant nextVisit) {
+        this.originId = originId;
+        this.pathId = pathId;
+        this.url = new Url(origin + path);
+        this.type = locationType;
+        this.depth = depth;
+        this.viaOriginId = viaOriginId;
+        this.viaPathId = viaPathId;
+        this.discovered = discovered;
+        this.lastVisit = lastVisit;
+        this.nextVisit = nextVisit;
     }
 
     public String href() {

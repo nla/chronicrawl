@@ -23,22 +23,22 @@ public class Visit {
     public final byte[] responsePayloadDigest;
     public final Instant revisitOfDate;
 
-    public Visit(ResultSet rs) throws SQLException {
-        originId = rs.getLong("origin_id");
-        pathId = rs.getLong("path_id");
-        date = Instant.ofEpochMilli(rs.getLong("date"));
-        method = rs.getString("method");
-        status = rs.getInt("status");
-        contentType = rs.getString("content_type");
-        contentLength = rs.getLong("content_length");
-        warcId = Database.getUUID(rs, "warc_id");
-        requestPosition = rs.getLong("request_position");
-        requestLength = rs.getLong("request_length");
-        requestPayloadDigest = rs.getBytes("request_payload_digest");
-        responsePosition = rs.getLong("response_position");
-        responseLength = rs.getLong("response_length");
-        responsePayloadDigest = rs.getBytes("response_payload_digest");
-        revisitOfDate = Database.getInstant(rs, "revisit_of_date");
+    public Visit(long originId, long pathId, Instant date, String method, int status, String contentType, long contentLength, UUID warcId, long requestPosition, long requestLength, byte[] requestPayloadDigest, long responsePosition, long responseLength, byte[] responsePayloadDigest, Instant revisitOfDate) {
+        this.originId = originId;
+        this.pathId = pathId;
+        this.date = date;
+        this.method = method;
+        this.status = status;
+        this.contentType = contentType;
+        this.contentLength = contentLength;
+        this.warcId = warcId;
+        this.requestPosition = requestPosition;
+        this.requestLength = requestLength;
+        this.requestPayloadDigest = requestPayloadDigest;
+        this.responsePosition = responsePosition;
+        this.responseLength = responseLength;
+        this.responsePayloadDigest = responsePayloadDigest;
+        this.revisitOfDate = revisitOfDate;
     }
 
     public String href() {

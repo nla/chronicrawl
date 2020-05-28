@@ -28,24 +28,14 @@ public class Schedule implements Comparable<Schedule> {
     private final int dayOfWeekBits;
     private final int hourOfDayBits;
 
-    public Schedule(ResultSet rs) throws SQLException {
-        id = rs.getLong("id");
-        name = rs.getString("name");
-        years = rs.getInt("years");
-        months = rs.getInt("months");
-        days = rs.getInt("days");
-        dayOfWeekBits = rs.getInt("days_of_week");
-        hourOfDayBits = rs.getInt("hours_of_day");
-    }
-
-    public Schedule(long id, String name, int years, int months, int days, int dayOfWeekBits, int hourOfDayBits) {
+    public Schedule(long id, String name, int years, int months, int days, int daysOfWeek, int hoursOfDay) {
         this.id = id;
         this.name = name;
         this.years = years;
         this.months = months;
         this.days = days;
-        this.dayOfWeekBits = dayOfWeekBits;
-        this.hourOfDayBits = hourOfDayBits;
+        this.dayOfWeekBits = daysOfWeek;
+        this.hourOfDayBits = hoursOfDay;
     }
 
     ZonedDateTime apply(ZonedDateTime prev) {

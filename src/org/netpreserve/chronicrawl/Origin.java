@@ -1,5 +1,7 @@
 package org.netpreserve.chronicrawl;
 
+import org.jdbi.v3.core.mapper.reflect.JdbiConstructor;
+
 import java.nio.charset.StandardCharsets;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -15,15 +17,17 @@ public class Origin {
     public final byte[] robotsTxt;
     public final CrawlPolicy crawlPolicy;
 
-    public Origin(ResultSet rs) throws SQLException {
-        id = rs.getLong("id");
-        name = rs.getString("origin");
-        discovered = Database.getInstant(rs, "discovered");
-        lastVisit = Database.getInstant(rs, "last_visit");
-        nextVisit = Database.getInstant(rs, "next_visit");
-        robotsCrawlDelay = Database.getLongOrNull(rs, "robots_crawl_delay");
-        robotsTxt = rs.getBytes("robots_txt");
-        crawlPolicy = CrawlPolicy.valueOfOrNull(rs.getString("crawl_policy"));
+    @JdbiConstructor
+    public Origin(long id, String origin, Instant discovered, Instant lastVisit, Instant nextVisit, Long robotsCrawlDelay,
+                  byte[] robotsTxt, CrawlPolicy crawlPolicy) {
+        this.id = id;
+        this.name = origin;
+        this.discovered = discovered;
+        this.lastVisit = lastVisit;
+        this.nextVisit = nextVisit;
+        this.robotsCrawlDelay = robotsCrawlDelay;
+        this.robotsTxt = robotsTxt;
+        this.crawlPolicy = crawlPolicy;
     }
 
     public String href() {

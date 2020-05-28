@@ -21,6 +21,14 @@
         </testResources>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+            <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <configuration>
                     <archive>
@@ -89,9 +97,9 @@
             <version>1.6</version>
         </dependency>
         <dependency>
-            <groupId>org.codejargon</groupId>
-            <artifactId>fluentjdbc</artifactId>
-            <version>1.8.4</version>
+            <groupId>org.jdbi</groupId>
+            <artifactId>jdbi3-sqlobject</artifactId>
+            <version>3.13.0</version>
         </dependency>
         <dependency>
             <groupId>org.java-websocket</groupId>

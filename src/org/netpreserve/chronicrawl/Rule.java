@@ -18,12 +18,12 @@ public class Rule {
     public final Long scheduleId;
     public final String scheduleName;
 
-    public Rule(ResultSet rs) throws SQLException {
-        originId = rs.getLong("origin_id");
-        pattern = rs.getString("pattern");
-        regex = Pattern.compile(pattern);
-        scheduleId = Database.getLongOrNull(rs, "schedule_id");
-        scheduleName = rs.getString("schedule_name");
+    public Rule(long originId, String pattern, Long scheduleId, String scheduleName) {
+        this.originId = originId;
+        this.pattern = pattern;
+        this.regex = Pattern.compile(pattern);
+        this.scheduleId = scheduleId;
+        this.scheduleName = scheduleName;
     }
 
     public boolean matches(String pathref) {

@@ -224,10 +224,11 @@ public class Exchange implements Closeable {
             contentType = httpResponse.contentType().base().toString();
         }
         Instant nextVisit = calcNextVisit();
-        crawl.db.query.transaction().inNoResult(() -> {
+        crawl.db.jdbi.inTransaction(h -> {
             crawl.db.origins.updateVisit(origin.id, date, date.plusMillis(calcDelayMillis()));
             crawl.db.locations.updateVisitData(location.url.originId(), location.url.pathId(), date, nextVisit);
             crawl.db.visits.insert(this);
+            return null;
         });
         System.out.printf("%s %5d %10s %s %s %s %s\n", date, fetchStatus, contentLength,
                 location.url, location.type, via != null ? via.url : "-", contentType != null ? contentType : "-");

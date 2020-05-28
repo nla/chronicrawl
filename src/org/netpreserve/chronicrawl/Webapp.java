@@ -177,7 +177,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     int origins = 100;
                     int locations = 1000;
                     long start = System.currentTimeMillis();
-                    db.query.transaction().inNoResult(() -> {
+                    db.jdbi.inTransaction(h -> {
                         for (int i = 0; i < origins; i++) {
                             String origin = "http://" + UUID.randomUUID().toString() + ".localhost";
                             db.origins.tryInsert(Url.hash(origin), origin, Instant.now(), CrawlPolicy.CONTINUOUS);
@@ -185,6 +185,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                                 db.locations.tryInsert(new Url(origin + "/" + UUID.randomUUID()), Location.Type.PAGE, null, 0, Instant.now());
                             }
                         }
+                        return null;
                     });
                     return seeOther(contextPath + "/debug", "Loaded " + origins + " random origins each with " + locations + " locations in " + (System.currentTimeMillis() - start) + " ms");
                 }
@@ -221,8 +222,9 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     boolean subresources = request.getParameters().containsKey("subresources");
                     Timestamp after = Optional.ofNullable(param("after", null))
                             .map(Timestamp::valueOf).orElse(Timestamp.from(Instant.now()));
-                    Object[] keysAndValues = new Object[]{"log", db.paginateCrawlLog(after.toInstant(), !subresources,100), "subresources", subresources, "after", param("after", null)};
-                    return render(View.log, keysAndValues);
+                    List<Map<String, Object>> log = subresources ? db.visits.paginateCrawlLog(after.toInstant(), 100) :
+                            db.visits.paginateCrawlLogPagesOnly(after.toInstant(), 100);
+                    return render(View.log, "log", log, "subresources", subresources, "after", param("after", null));
                 case "GET /origin": {
                     requireRole("admin");
                     Long id = paramLong("id", null);
@@ -340,11 +342,12 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     for (String name : request.getParameters().getOrDefault("set", List.of())) {
                         testConfig.set(name, param(name));
                     }
-                    db.query.transaction().inNoResult(() -> {
+                    db.jdbi.inTransaction(h -> {
                         db.config.deleteAll();
                         for (String name : request.getParameters().getOrDefault("set", List.of())) {
                             db.config.insert(name, param(name));
                         }
+                        return null;
                     });
                     crawl.config.load(db.config.getAll());
                     return seeOther(contextPath + "/settings", "Config updated.");

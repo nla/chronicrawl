@@ -2,40 +2,43 @@ package org.netpreserve.chronicrawl;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.codejargon.fluentjdbc.api.FluentJdbc;
-import org.codejargon.fluentjdbc.api.FluentJdbcBuilder;
-import org.codejargon.fluentjdbc.api.FluentJdbcSqlException;
-import org.codejargon.fluentjdbc.api.mapper.Mappers;
-import org.codejargon.fluentjdbc.api.query.Query;
-import org.codejargon.fluentjdbc.api.query.UpdateResult;
+import org.jdbi.v3.core.Jdbi;
+import org.jdbi.v3.core.argument.AbstractArgumentFactory;
+import org.jdbi.v3.core.argument.Argument;
+import org.jdbi.v3.core.config.ConfigRegistry;
+import org.jdbi.v3.core.mapper.CaseStrategy;
+import org.jdbi.v3.core.mapper.MapMapper;
+import org.jdbi.v3.core.mapper.MapMappers;
+import org.jdbi.v3.sqlobject.SqlObject;
+import org.jdbi.v3.sqlobject.SqlObjectPlugin;
+import org.jdbi.v3.sqlobject.config.KeyColumn;
+import org.jdbi.v3.sqlobject.config.RegisterConstructorMapper;
+import org.jdbi.v3.sqlobject.config.RegisterRowMapper;
+import org.jdbi.v3.sqlobject.config.ValueColumn;
+import org.jdbi.v3.sqlobject.statement.SqlQuery;
+import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 import org.netpreserve.jwarc.WarcDigest;
 import org.sqlite.SQLiteConfig;
 
 import java.nio.ByteBuffer;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.SQLIntegrityConstraintViolationException;
+import java.sql.*;
 import java.time.Instant;
 import java.util.*;
 
-import static java.util.Objects.requireNonNull;
-import static org.codejargon.fluentjdbc.api.mapper.Mappers.singleString;
-
 public class Database implements AutoCloseable {
     private final HikariDataSource dataSource;
-    final Query query;
     public final IdGenerator ids = new IdGenerator(0); // TODO: claim unique nodeId
-    public final ConfigDAO config = new ConfigDAO();
-    public final LocationDAO locations = new LocationDAO();
-    public final OriginDAO origins = new OriginDAO();
-    public final RuleDAO rules = new RuleDAO();
-    public final ScheduleDAO schedules = new ScheduleDAO();
-    public final ScreenshotCacheDAO screenshotCache = new ScreenshotCacheDAO();
-    public final SitemapEntryDAO sitemapEntries = new SitemapEntryDAO();
-    public final SessionDAO sessions = new SessionDAO();
-    public final VisitDAO visits = new VisitDAO();
-    public final WarcDAO warcs = new WarcDAO();
+    public final ConfigDAO config;
+    public final LocationDAO locations;
+    public final OriginDAO origins;
+    public final RuleDAO rules;
+    public final ScheduleDAO schedules;
+    public final ScreenshotCacheDAO screenshotCache;
+    public final SitemapEntryDAO sitemapEntries;
+    public final SessionDAO sessions;
+    public final VisitDAO visits;
+    public final WarcDAO warcs;
+    final Jdbi jdbi;
 
     Database(String url, String user, String password) {
         var config = new HikariConfig();
@@ -55,16 +58,40 @@ public class Database implements AutoCloseable {
         }
 
         dataSource = new HikariDataSource(config);
-        FluentJdbc fluent = new FluentJdbcBuilder().connectionProvider(dataSource).build();
+        this.jdbi = Jdbi.create(dataSource);
+        jdbi.getConfig(MapMappers.class).setCaseChange(CaseStrategy.NOP);
+        jdbi.installPlugin(new SqlObjectPlugin());
+        jdbi.registerColumnMapper(Instant.class, (r, i, ctx) -> {
+            long millis = r.getLong(i);
+            return r.wasNull() ? null : Instant.ofEpochMilli(millis);
+        });
+        jdbi.registerArgument(new AbstractArgumentFactory<Instant>(Types.BIGINT) {
+            protected Argument build(Instant value, ConfigRegistry config) {
+                return (i, stmt, ctx) -> stmt.setLong(i, value.toEpochMilli());
+            }
+        });
+        jdbi.registerColumnMapper(UUID.class, (r, i, ctx) -> {
+            byte[] bytes = r.getBytes(i);
+            if (bytes == null) return null;
+            var bb = ByteBuffer.wrap(bytes);
+            return new UUID(bb.getLong(), bb.getLong());
+        });
+        jdbi.registerArgument(new AbstractArgumentFactory<UUID>(Types.VARBINARY) {
+            protected Argument build(UUID value, ConfigRegistry config) {
+                return (i, stmt, ctx) -> stmt.setBytes(i, toBytes(value));
+            }
+        });
 
-        query = fluent.query();
-    }
-
-    public static UUID getUUID(ResultSet rs, String field) throws SQLException {
-        byte[] bytes = rs.getBytes(field);
-        if (bytes == null) return null;
-        var bb = ByteBuffer.wrap(bytes);
-        return new UUID(bb.getLong(), bb.getLong());
+        this.config = jdbi.onDemand(ConfigDAO.class);
+        this.origins = jdbi.onDemand(OriginDAO.class);
+        this.locations = jdbi.onDemand(LocationDAO.class);
+        this.rules = jdbi.onDemand(RuleDAO.class);
+        this.schedules = jdbi.onDemand(ScheduleDAO.class);
+        this.screenshotCache = jdbi.onDemand(ScreenshotCacheDAO.class);
+        this.sitemapEntries = jdbi.onDemand(SitemapEntryDAO.class);
+        this.sessions = jdbi.onDemand(SessionDAO.class);
+        this.visits = jdbi.onDemand(VisitDAO.class);
+        this.warcs = jdbi.onDemand(WarcDAO.class);
     }
 
     public static byte[] toBytes(UUID uuid) {
@@ -107,105 +134,92 @@ public class Database implements AutoCloseable {
         dataSource.close();
     }
 
-    public class ConfigDAO {
-        public HashMap<String, String> getAll() {
-            var map = new HashMap<String, String>();
-            query.select("SELECT name, value FROM config")
-                    .iterateResult(rs -> map.put(rs.getString("name"), rs.getString("value")));
-            return map;
-        }
+    public interface ConfigDAO {
+        @SqlQuery("SELECT name, value FROM config")
+        @KeyColumn("name")
+        @ValueColumn("value")
+        Map<String, String> getAll();
 
-        public void insert(String name, String value) {
-            query.update("INSERT INTO config (name, value) VALUES (?, ?)")
-                    .params(name, value)
-                    .run();
-        }
+        @SqlUpdate("INSERT INTO config (name, value) VALUES (?, ?)")
+        void insert(String name, String value);
 
-        public void deleteAll() {
-            query.update("DELETE FROM config").run();
-        }
+        @SqlUpdate("DELETE FROM config")
+        void deleteAll();
     }
 
-    public class OriginDAO {
-        private static final String fields = "o.id, o.origin, o.discovered, o.last_visit, o.next_visit, " +
+    @RegisterConstructorMapper(Origin.class)
+    public interface OriginDAO {
+        String fields = "o.id, o.origin, o.discovered, o.last_visit, o.next_visit, " +
                 "o.robots_crawl_delay, o.robots_txt, (SELECT cp.name FROM crawl_policy cp WHERE cp.id = o.crawl_policy_id) as crawl_policy";
 
-        public Origin find(long originId) {
-            return query.select("SELECT " + fields + " FROM origin o WHERE id = ?")
-                    .params(originId).firstResult(Origin::new).orElse(null);
-        }
+        @SqlQuery("SELECT " + fields + " FROM origin o WHERE id = ?")
+        Origin find(long originId);
 
-        public List<Origin> peek(int limit) {
-            return query.select("SELECT " + fields + " FROM origin o " +
-                    "WHERE crawl_policy_id = (SELECT id FROM crawl_policy WHERE name = 'CONTINUOUS') AND next_visit IS NOT NULL " +
-                    "ORDER BY next_visit ASC LIMIT ?")
-                    .params(limit)
-                    .listResult(Origin::new);
-        }
 
-        private Optional<String> findOrigin(long id) {
-            return query.select("SELECT origin FROM origin WHERE id = ?").params(id).firstResult(singleString());
-        }
+        @SqlQuery("SELECT " + fields + " FROM origin o " +
+                "WHERE crawl_policy_id = (SELECT id FROM crawl_policy WHERE name = 'CONTINUOUS') AND next_visit IS NOT NULL " +
+                "ORDER BY next_visit ASC LIMIT ?")
+        List<Origin> peek(int limit);
 
-        public boolean tryInsert(long id, String name, Instant discovered, CrawlPolicy crawlPolicy) {
-                Optional<String> existing = findOrigin(id);
-                if (existing.isEmpty()) {
+        @SqlQuery("SELECT origin FROM origin WHERE id = ?")
+        String findOrigin(long id);
+
+        @SqlUpdate("INSERT INTO origin (id, origin, discovered, next_visit, crawl_policy_id) " +
+                "VALUES (?, ?, ?, ?, (SELECT id FROM crawl_policy WHERE name = ?))")
+        void insert(long id, String origin, Instant discovered, Instant nextVisit, CrawlPolicy crawlPolicy);
+
+        default boolean tryInsert(long id, String name, Instant discovered, CrawlPolicy crawlPolicy) {
+                String existing = findOrigin(id);
+                if (existing == null) {
                     try {
-                        query.update("INSERT INTO origin (id, origin, discovered, next_visit, crawl_policy_id) VALUES (?, ?, ?, ?, (SELECT id FROM crawl_policy WHERE name = ?))")
-                                .params(id, name, discovered.toEpochMilli(), discovered.toEpochMilli(), crawlPolicy).run();
-                    } catch (FluentJdbcSqlException e) {
+                        insert(id, name, discovered, discovered, crawlPolicy);
+                    } catch (Exception e) {
                         if (!(e.getCause() instanceof SQLIntegrityConstraintViolationException || e.getCause().getMessage().contains("SQLITE_CONSTRAINT"))) throw e;
                         existing = findOrigin(id); // handle insert race
                     }
                 }
-                if (existing.isPresent() && !existing.get().equals(name)) {
-                    throw new RuntimeException("Hash collision between " + existing.get() + " and " + name);
+                if (existing != null && !existing.equals(name)) {
+                    throw new RuntimeException("Hash collision between " + existing + " and " + name);
                 }
-                return existing.isEmpty();
+                return existing != null;
         }
 
-        public void updateVisit(long originId, Instant lastVisit, Instant nextVisit) {
-            check(query.update("UPDATE origin SET next_visit = ?, last_visit = ? WHERE id = ?")
-                    .params(nextVisit == null ? null : nextVisit.toEpochMilli(), lastVisit.toEpochMilli(), originId).run());
-        }
+        @SqlUpdate("UPDATE origin SET next_visit = :nextVisit, last_visit = :lastVisit WHERE id = :originId")
+        void updateVisit(long originId, Instant lastVisit, Instant nextVisit);
 
-        public void updateRobots(long originId, Short crawlDelay, byte[] robotsTxt) {
-            check(query.update("UPDATE origin SET robots_crawl_delay = ?, robots_txt = ? WHERE id = ?")
-                    .params(crawlDelay, robotsTxt, originId).run());
-        }
+        @SqlUpdate("UPDATE origin SET robots_crawl_delay = :crawlDelay, robots_txt = :robotsTxt WHERE id = :originId")
+        void updateRobots(long originId, Short crawlDelay, byte[] robotsTxt);
 
-        public void updateCrawlPolicy(long id, CrawlPolicy crawlPolicy) {
-            check(query.update("UPDATE origin SET crawl_policy_id = (SELECT id FROM crawl_policy WHERE name = ?) WHERE id = ?").params(crawlPolicy, id).run());
-        }
+        @SqlUpdate("UPDATE origin SET crawl_policy_id = (SELECT id FROM crawl_policy WHERE name = :crawlPolicy) WHERE id = :id")
+        void updateCrawlPolicy(long id, CrawlPolicy crawlPolicy);
     }
 
-    public class LocationDAO {
-        private static final String fields = "l.origin_id, l.path_id, o.origin, l.path, l.depth, " +
+    @RegisterConstructorMapper(Location.class)
+    public interface LocationDAO {
+        String fields = "l.origin_id, l.path_id, o.origin, l.path, l.depth, " +
                 "(SELECT lt.location_type FROM location_type lt WHERE lt.id = l.location_type_id) AS location_type, " +
                 "l.via_origin_id, l.via_path_id, l.discovered, l.last_visit, l.next_visit";
 
-        public Location find(long originId, long pathId) {
-            return query.select("SELECT " + fields + " FROM location l " +
-                    "LEFT JOIN origin o ON o.id = l.origin_id " +
-                    "WHERE origin_id = ? AND path_id = ? LIMIT 1")
-                    .params(originId, pathId)
-                    .firstResult(Location::new)
-                    .orElse(null);
-        }
+        @SqlQuery("SELECT " + fields + " FROM location l " +
+                "LEFT JOIN origin o ON o.id = l.origin_id " +
+                "WHERE origin_id = ? AND path_id = ? LIMIT 1")
+        Location find(long originId, long pathId);
 
 
+        @SqlUpdate("INSERT INTO location (origin_id, path_id, path, location_type_id, depth, via_origin_id, via_path_id, discovered, next_visit) " +
+                "VALUES (?, ?, ?, (SELECT id FROM location_type WHERE location_type = ?), ?, ?, ?, ?, ?)")
+        void insert(long originId, long pathId, String pathref, String name, int depth, Long viaOriginId,
+                    Long viaPathId, Instant discovered, Instant nextVisit);
 
-        public void tryInsert(Url url, Location.Type type, Url viaUrl, int depth, Instant discovered) {
+        default void tryInsert(Url url, Location.Type type, Url viaUrl, int depth, Instant discovered) {
             do {
                 var existingPath = findPath(url);
                 if (existingPath.isEmpty()) {
                     try {
-                        query.update("INSERT INTO location (origin_id, path_id, path, location_type_id, depth, via_origin_id, via_path_id, discovered, next_visit) " +
-                                "VALUES (?, ?, ?, (SELECT id FROM location_type WHERE location_type = ?), ?, ?, ?, ?, ?)")
-                                .params(url.originId(), url.pathId(), url.pathref(), type.name(), depth,
+                        insert(url.originId(), url.pathId(), url.pathref(), type.name(), depth,
                                         viaUrl == null ? null : viaUrl.originId(), viaUrl == null ? null : viaUrl.pathId(),
-                                        discovered.toEpochMilli(), discovered.toEpochMilli()).run();
-                    } catch (FluentJdbcSqlException e) {
+                                        discovered, discovered);
+                    } catch (Exception e) {
                         if (e.getCause().getMessage().contains("SQLITE_BUSY")) {
                             System.out.println("retry");
                             continue;
@@ -221,183 +235,208 @@ public class Database implements AutoCloseable {
             } while (false);
         }
 
-        private Optional<String> findPath(Url url) {
-            return query.select("SELECT path FROM location WHERE origin_id = ? AND path_id = ?").params(url.originId(), url.pathId()).firstResult(singleString());
+        @SqlQuery("SELECT path FROM location WHERE origin_id = ? AND path_id = ?")
+        Optional<String> findPath(long originId, long pathId);
+
+        default Optional<String> findPath(Url url) {
+            return findPath(url.originId(), url.pathId());
         }
 
-        public Location peek(long originId) {
+        default Location peek(long originId) {
             return peek(originId, 1).stream().findFirst().orElse(null);
         }
 
-        public List<Location> peek(long originId, int limit) {
-            return query.select("SELECT " + fields + " FROM location l " +
-                    "LEFT JOIN origin o ON o.id = l.origin_id " +
-                    "LEFT JOIN sitemap_entry se ON se.origin_id = l.origin_id AND se.path_id = l.path_id " +
-                    "WHERE l.next_visit <= ? AND l.origin_id = ? " +
-                    "ORDER BY l.location_type_id DESC, se.priority DESC, l.depth ASC, l.next_visit ASC LIMIT ?")
-                    .params(Instant.now().toEpochMilli(), originId, limit)
-                    .listResult(Location::new);
+        @SqlQuery("SELECT " + fields + " FROM location l " +
+                "LEFT JOIN origin o ON o.id = l.origin_id " +
+                "LEFT JOIN sitemap_entry se ON se.origin_id = l.origin_id AND se.path_id = l.path_id " +
+                "WHERE l.next_visit <= ? AND l.origin_id = ? " +
+                "ORDER BY l.location_type_id DESC, se.priority DESC, l.depth ASC, l.next_visit ASC LIMIT ?")
+        List<Location> peek(Instant now, long originId, int limit);
+
+        default List<Location> peek(long originId, int limit) {
+            return peek(Instant.now(), originId, limit);
         }
 
-        public void updateVisitData(long originId, long pathId, Instant lastVisit, Instant nextVisit) {
-            check(query.update("UPDATE location SET next_visit = ?, last_visit = ? WHERE origin_id = ? AND path_id = ?")
-                    .params(nextVisit.toEpochMilli(), lastVisit.toEpochMilli(), originId, pathId).run());
-        }
+        @SqlUpdate("UPDATE location SET next_visit = :nextVisit, last_visit = :lastVisit WHERE origin_id = :originId AND path_id = :pathId")
+        void updateVisitData(long originId, long pathId, Instant lastVisit, Instant nextVisit);
 
-        public List<Location> paginate(long originId, long startPathId, int limit) {
-            return query.select("SELECT " + fields + " FROM location l " +
-                    "LEFT JOIN origin o ON o.id = l.origin_id " +
-                    "WHERE origin_id = ? AND path_id >= ? ORDER BY path_id ASC LIMIT ?").params(originId, startPathId, limit)
-                    .listResult(Location::new);
-        }
+        @SqlQuery("SELECT " + fields + " FROM location l " +
+                "LEFT JOIN origin o ON o.id = l.origin_id " +
+                "WHERE origin_id = ? AND path_id >= ? ORDER BY path_id ASC LIMIT ?")
+        List<Location> paginate(long originId, long startPathId, int limit);
     }
 
-    public class RuleDAO {
-        public List<Rule> listForOriginId(long originId) {
-            return query.select("SELECT rule.*, schedule.name AS schedule_name FROM rule " +
-                    "LEFT JOIN schedule ON schedule.id = rule.schedule_id " +
-                    "WHERE origin_id = ?").params(originId).listResult(Rule::new);
-        }
+    @RegisterConstructorMapper(Rule.class)
+    public interface RuleDAO {
+        @SqlQuery("SELECT rule.*, schedule.name AS schedule_name FROM rule " +
+                "LEFT JOIN schedule ON schedule.id = rule.schedule_id " +
+                "WHERE origin_id = ?")
+        List<Rule> listForOriginId(long originId);
 
-        public void insert(long originId, String pattern, Long scheduleId) {
-            query.update("INSERT INTO rule (origin_id, pattern, schedule_id) VALUES (?, ?, ?)")
-                    .params(originId, pattern, scheduleId).run();
-        }
+        @SqlUpdate("INSERT INTO rule (origin_id, pattern, schedule_id) VALUES (?, ?, ?)")
+        void insert(long originId, String pattern, Long scheduleId);
 
-        public void update(long originId, String oldPattern, String newPattern, Long scheduleId) {
-            check(query.update("UPDATE rule SET pattern = ?, schedule_id = ? WHERE origin_id = ? AND pattern = ?")
-                    .params(newPattern, scheduleId, originId, oldPattern).run());
-        }
+        @SqlUpdate("UPDATE rule SET pattern = :newPattern, schedule_id = :scheduleId " +
+                "WHERE origin_id = :originId AND pattern = :oldPattern")
+        void update(long originId, String oldPattern, String newPattern, Long scheduleId);
 
-        public Rule find(long originId, String pattern) {
-            return query.select("SELECT rule.*, schedule.name AS schedule_name FROM rule " +
-                    "LEFT JOIN schedule ON schedule.id = rule.schedule_id " +
-                    "WHERE rule.origin_id = ? AND rule.pattern = ?").params(originId, pattern).firstResult(Rule::new)
-                    .orElse(null);
-        }
+        @SqlQuery("SELECT rule.*, schedule.name AS schedule_name FROM rule " +
+                "LEFT JOIN schedule ON schedule.id = rule.schedule_id " +
+                "WHERE rule.origin_id = ? AND rule.pattern = ?")
+        Rule find(long originId, String pattern);
 
-        public void delete(long originId, String pattern) {
-            check(query.update("DELETE FROM rule WHERE origin_id = ? AND pattern = ?").params(originId, pattern).run());
-        }
+        @SqlUpdate("DELETE FROM rule WHERE origin_id = ? AND pattern = ?")
+        void delete(long originId, String pattern);
     }
 
-    public class ScheduleDAO {
-        public List<Schedule> list() {
-            List<Schedule> schedules = new ArrayList<>(query.select("SELECT * FROM schedule").listResult(Schedule::new));
+    @RegisterConstructorMapper(Schedule.class)
+    public interface ScheduleDAO {
+        @SqlQuery("SELECT * FROM schedule")
+        List<Schedule> _list();
+
+        default List<Schedule> list() {
+            List<Schedule> schedules = new ArrayList<>(_list());
             schedules.sort(Comparator.naturalOrder());
             return schedules;
         }
 
-        public Schedule find(long id) {
-            return query.select("SELECT * FROM schedule WHERE id = ?").params(id).singleResult(Schedule::new);
-        }
+        @SqlQuery("SELECT * FROM schedule WHERE id = ?")
+        Schedule find(long id);
 
-        public void delete(long id) {
-            check(query.update("DELETE FROM schedule WHERE id = ?").params(id).run());
-        }
+        @SqlUpdate("DELETE FROM schedule WHERE id = ?")
+        void delete(long id);
 
-        public void update(long id, String name, int years, int months, int days, int daysOfWeek, int hoursOfDay) {
-            check(query.update("UPDATE schedule SET name = ?, years = ?, months = ?, days = ?, days_of_week = ?, " +
-                    "hours_of_day = ? WHERE id = ?").params(name, years, months, days, daysOfWeek, hoursOfDay, id).run());
-        }
+        @SqlUpdate("UPDATE schedule SET name = :name, years = :years, months = :months, days = :days, " +
+                "days_of_week = :daysOfWeek, hours_of_day = :hoursOfDay WHERE id = :id")
+        void update(long id, String name, int years, int months, int days, int daysOfWeek, int hoursOfDay);
 
-        public void insert(long id, String name, int years, int months, int days, int dayOfWeek, int hourOfDay) {
-            query.update("INSERT INTO schedule (id, name, years, months, days, days_of_week, hours_of_day) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)").params(id, name, years, months, days, dayOfWeek, hourOfDay).run();
-        }
+        @SqlUpdate("INSERT INTO schedule (id, name, years, months, days, days_of_week, hours_of_day) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)")
+        void insert(long id, String name, int years, int months, int days, int dayOfWeek, int hourOfDay);
     }
 
-    public class SitemapEntryDAO {
-        public void insertOrReplace(Url url, Url sitemapUrl, Sitemap.ChangeFreq changeFreq, Float priority, String lastmod) {
-            query.update("DELETE FROM sitemap_entry WHERE origin_id = ? AND path_id = ?").params(url.originId(), url.pathId()).run();
-            check(query.update("INSERT INTO sitemap_entry (origin_id, path_id, sitemap_origin_id, sitemap_path_id, changefreq, priority, lastmod) VALUES (?, ?, ?, ?, ?, ?, ?)")
-                    .params(url.originId(), url.pathId(), sitemapUrl.originId(), sitemapUrl.pathId(), changeFreq, priority, lastmod).run());
+    public interface SitemapEntryDAO {
+        @SqlUpdate("DELETE FROM sitemap_entry WHERE origin_id = ? AND path_id = ?")
+        void _delete(long originId, long pathId);
+
+        @SqlUpdate("INSERT INTO sitemap_entry (origin_id, path_id, sitemap_origin_id, sitemap_path_id, changefreq, priority, lastmod) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        void _update(long originid, long pathId, long sitemapOriginId, long sitemapPathId, Sitemap.ChangeFreq changeFreq, Float priority, String lastmod);
+
+        default void insertOrReplace(Url url, Url sitemapUrl, Sitemap.ChangeFreq changeFreq, Float priority, String lastmod) {
+            _delete(url.originId(), url.pathId());
+            _update(url.originId(), url.pathId(), sitemapUrl.originId(), sitemapUrl.pathId(), changeFreq, priority, lastmod);
         }
 
-        public String findChangefreq(long originId, long pathId) {
-            return query.select("SELECT changefreq FROM sitemap_entry WHERE origin_id = ? AND path_id = ? LIMIT 1")
-                    .params(originId, pathId)
-                    .firstResult(singleString()).orElse(null);
-        }
+        @SqlQuery("SELECT changefreq FROM sitemap_entry WHERE origin_id = ? AND path_id = ? LIMIT 1")
+        String findChangefreq(long originId, long pathId);
     }
 
-    public class VisitDAO {
-        public Visit find(long originId, long pathId, Instant date) {
-            return query.select("SELECT *, (SELECT method FROM method WHERE method.id = v.method_id) AS method, " +
-                    "(SELECT ct.content_type FROM content_type ct WHERE ct.id = v.content_type_id) AS content_type " +
-                    "FROM visit v WHERE origin_id = ? AND path_id = ? AND date = ?").params(originId, pathId, date.toEpochMilli())
-                    .singleResult(Visit::new);
-        }
+    @RegisterConstructorMapper(Visit.class)
+    @RegisterConstructorMapper(CdxLine.class)
+    public interface VisitDAO extends SqlObject {
+        @SqlQuery("SELECT *, (SELECT method FROM method WHERE method.id = v.method_id) AS method, " +
+                "(SELECT ct.content_type FROM content_type ct WHERE ct.id = v.content_type_id) AS content_type " +
+                "FROM visit v WHERE origin_id = ? AND path_id = ? AND date = ?")
+        Visit find(long originId, long pathId, Instant date);
 
-        public List<Visit> list(long originId, long pathId) {
-            return query.select("SELECT *, (SELECT method FROM method WHERE method.id = v.method_id) AS method, " +
-                    "(SELECT ct.content_type FROM content_type ct WHERE ct.id = v.content_type_id) AS content_type " +
-                    "FROM visit v WHERE origin_id = ? AND path_id = ? ORDER BY date DESC LIMIT 100")
-                    .params(originId, pathId)
-                    .listResult(Visit::new);
-        }
+        @SqlQuery("SELECT *, (SELECT method FROM method WHERE method.id = v.method_id) AS method, " +
+                "(SELECT ct.content_type FROM content_type ct WHERE ct.id = v.content_type_id) AS content_type " +
+                "FROM visit v WHERE origin_id = ? AND path_id = ? ORDER BY date DESC LIMIT 100")
+        List<Visit> list(long originId, long pathId);
 
-        public Visit findByResponsePayloadDigest(long originId, long pathId, byte[] digest) {
-            Optional<Long> date = query.select("SELECT date FROM visit WHERE origin_id = ? AND path_id = ? AND response_payload_digest = ? AND revisit_of_date IS NULL LIMIT 1")
-                    .params(originId, pathId, Arrays.copyOf(digest, 8)).firstResult(Mappers.singleLong());
-            if (date.isEmpty()) return null;
-            return find(originId, pathId, Instant.ofEpochMilli(date.get()));
-        }
+        @SqlQuery("SELECT *, (SELECT method FROM method WHERE method.id = v.method_id) AS method, " +
+                "(SELECT ct.content_type FROM content_type ct WHERE ct.id = v.content_type_id) AS content_type " +
+                "FROM visit v WHERE origin_id = ? AND path_id = ? AND response_payload_digest = ? " +
+                "AND revisit_of_date IS NULL LIMIT 1")
+        Visit findByResponsePayloadDigest(long originId, long pathId, byte[] digest);
 
-        public void insert(Exchange exchange) {
-            query.update("INSERT INTO visit (origin_id, path_id, date, method_id, status, content_length, " +
-                    "content_type_id, warc_id, request_position, request_length, request_payload_digest, " +
-                    "response_position, response_length, response_payload_digest, revisit_of_date) " +
-                    "VALUES (?, ?, ?, (SELECT id FROM method WHERE method = ?), ?, ?, " +
-                    "COALESCE((SELECT id FROM content_type WHERE content_type = ?), (SELECT id FROM content_type WHERE content_type = 'application/octet-stream')), " +
-                    "?, ?, ?, ?, ?, ?, ?, ?)")
-                    .params(exchange.location.originId, exchange.location.pathId, exchange.date.toEpochMilli(), exchange.method,
-                            exchange.fetchStatus, exchange.contentLength, exchange.contentType, toBytes(exchange.warcId),
+        @SqlUpdate("INSERT INTO visit (origin_id, path_id, date, method_id, status, content_length, " +
+                "content_type_id, warc_id, request_position, request_length, request_payload_digest, " +
+                "response_position, response_length, response_payload_digest, revisit_of_date) " +
+                "VALUES (?, ?, ?, (SELECT id FROM method WHERE method = ?), ?, ?, " +
+                "COALESCE((SELECT id FROM content_type WHERE content_type = ?), " +
+                "(SELECT id FROM content_type WHERE content_type = 'application/octet-stream')), " +
+                "?, ?, ?, ?, ?, ?, ?, ?)")
+        void _insert(long originId, long pathId, Instant date, String method, int fetchStatus, long contentLength,
+                     String contentType, UUID warcId, long requestPosition, long requestLength, byte[] requestPayloadDigest,
+                     long responsePosition, long responseLength, byte[] responsePayloadDigest, Instant revisitOfDate);
+
+        default void insert(Exchange exchange) {
+            _insert(exchange.location.originId, exchange.location.pathId, exchange.date, exchange.method,
+                            exchange.fetchStatus, exchange.contentLength, exchange.contentType, exchange.warcId,
                             exchange.requestPosition, exchange.requestLength, null, exchange.responsePosition,
                             exchange.responseLength, exchange.digest == null ? null : Arrays.copyOf(exchange.digest, 8),
-                            exchange.revisitOf == null ? null : exchange.revisitOf.date.toEpochMilli()).run();
+                            exchange.revisitOf == null ? null : exchange.revisitOf.date);
         }
 
-        public Visit findClosest(long originId, long pathId, Instant closestDate, String method) {
-            Optional<Long> closest = query.select("SELECT date FROM visit WHERE origin_id = ? AND path_id = ? " +
-                    "AND method_id = (SELECT id FROM method WHERE method = ?) AND STATUS > 0 AND STATUS <> 304 " +
-                    "ORDER BY ABS(date - ?) DESC LIMIT 1")
-                    .params(originId, pathId, method, closestDate.toEpochMilli()).firstResult(Mappers.singleLong());
-            return closest.map(date -> find(originId, pathId, Instant.ofEpochMilli(date))).orElse(null);
+        @SqlQuery("SELECT date FROM visit WHERE origin_id = ? AND path_id = ? " +
+                "AND method_id = (SELECT id FROM method WHERE method = ?) AND STATUS > 0 AND STATUS <> 304 " +
+                "ORDER BY ABS(date - ?) DESC LIMIT 1")
+        Long _findClosest(long originId, long pathId, String method, Instant closestDate);
+
+        default Visit findClosest(long originId, long pathId, Instant closestDate, String method) {
+            Long closest = _findClosest(originId, pathId, method, closestDate);
+            return closest == null ? null : find(originId, pathId, Instant.ofEpochMilli(closest));
         }
 
-        public List<CdxLine> asCdxLines(long originId, long pathId) {
-            return query.select("SELECT v.date, (o.origin || l.path) as url, ct.content_type, v.status, " +
-                    "v.response_payload_digest, v.response_length, v.response_position, v.warc_id " +
-                    "FROM visit v " +
-                    "LEFT JOIN location l ON l.origin_id = v.origin_id AND l.path_id = v.path_id " +
-                    "LEFT JOIN origin o ON o.id = l.origin_id " +
-                    "LEFT JOIN content_type ct ON ct.id = v.content_type_id " +
-                    "WHERE v.origin_id = ? AND v.path_id = ? AND " +
-                    "v.method_id = (SELECT id FROM method WHERE method = 'GET') AND v.status > 0 AND v.status <> 304 " +
-                    "AND v.response_payload_digest IS NOT NULL AND v.warc_id IS NOT NULL " +
-                    "LIMIT 1000").params(originId, pathId)
-                    .listResult(CdxLine::new);
-        }
+        @SqlQuery("SELECT v.date, (o.origin || l.path) as url, ct.content_type, v.status, " +
+                "v.response_payload_digest, v.response_length, v.response_position, v.warc_id " +
+                "FROM visit v " +
+                "LEFT JOIN location l ON l.origin_id = v.origin_id AND l.path_id = v.path_id " +
+                "LEFT JOIN origin o ON o.id = l.origin_id " +
+                "LEFT JOIN content_type ct ON ct.id = v.content_type_id " +
+                "WHERE v.origin_id = ? AND v.path_id = ? AND " +
+                "v.method_id = (SELECT id FROM method WHERE method = 'GET') AND v.status > 0 AND v.status <> 304 " +
+                "AND v.response_payload_digest IS NOT NULL AND v.warc_id IS NOT NULL " +
+                "LIMIT 1000")
+        List<CdxLine> asCdxLines(long originId, long pathId);
+
+        @SqlQuery("SELECT v.origin_id AS originId, v.path_id AS pathId, v.date, m.method, " +
+                "o.origin, l.path, v.status, ct.content_type, v.content_length " +
+                "FROM visit v " +
+                "LEFT JOIN location l ON l.origin_id = v.origin_id AND l.path_id = v.path_id " +
+                "LEFT JOIN origin o ON o.id = v.origin_id " +
+                "LEFT JOIN method m ON m.id = v.method_id " +
+                "LEFT JOIN content_type ct ON ct.id = v.content_type_id " +
+                "LEFT JOIN location_type lt ON lt.id = l.location_type_id " +
+                "WHERE v.date < ? " +
+                "ORDER BY v.date DESC LIMIT ?")
+        @RegisterRowMapper(MapMapper.class)
+        List<Map<String, Object>> paginateCrawlLog(Instant after, int limit);
+
+        @SqlQuery("SELECT v.origin_id AS originId, v.path_id AS pathId, v.date, m.method, " +
+                "o.origin, l.path, v.status, ct.content_type, v.content_length " +
+                "FROM visit v " +
+                "LEFT JOIN location l ON l.origin_id = v.origin_id AND l.path_id = v.path_id " +
+                "LEFT JOIN origin o ON o.id = v.origin_id " +
+                "LEFT JOIN method m ON m.id = v.method_id " +
+                "LEFT JOIN content_type ct ON ct.id = v.content_type_id " +
+                "LEFT JOIN location_type lt ON lt.id = l.location_type_id " +
+                "WHERE v.date < ? AND lt.location_type = 'PAGE' " +
+                "ORDER BY v.date DESC LIMIT ?")
+        @RegisterRowMapper(MapMapper.class)
+        List<Map<String, Object>> paginateCrawlLogPagesOnly(Instant after, int limit);
     }
 
-    public class ScreenshotCacheDAO {
-        public void insert(Url url, Instant date, byte[] screenshot) {
-            query.update("INSERT INTO screenshot_cache (origin_id, path_id, date, screenshot) VALUES (?, ?, ?, ?)").params(url.originId(), url.pathId(), date.toEpochMilli(), screenshot).run();
+    @RegisterConstructorMapper(Screenshot.class)
+    public interface ScreenshotCacheDAO {
+        @SqlUpdate("INSERT INTO screenshot_cache (origin_id, path_id, date, screenshot) VALUES (?, ?, ?, ?)")
+        void _insert(long originId, long pathId, Instant date, byte[] screenshot);
+
+        default void insert(Url url, Instant date, byte[] screenshot) {
+            _insert(url.originId(), url.pathId(), date, screenshot);
         }
 
-        public void expire(int keep) {
-            query.update("delete from screenshot_cache where date < (select min(date) from (select date from screenshot_cache order by date desc limit ?))").params(keep).run();
-        }
+        @SqlUpdate("delete from screenshot_cache where date < (select min(date) from (select date from screenshot_cache order by date desc limit ?))")
+        void expire(int keep);
 
-        public List<Screenshot> getN(int n, long after) {
-            return query.select("SELECT sc.origin_id, sc.path_id, sc.date, o.origin, l.path, sc.screenshot FROM screenshot_cache sc " +
-                    "LEFT JOIN location l ON l.origin_id = sc.origin_id AND l.path_id = sc.path_id " +
-                    "LEFT JOIN origin o ON o.id = sc.origin_id " +
-                    "WHERE sc.date > ? " +
-                    "ORDER BY sc.date DESC " +
-                    "LIMIT ?").params(after, n).listResult(Screenshot::new);
-        }
+        @SqlQuery("SELECT sc.origin_id, sc.path_id, sc.date, o.origin, l.path, sc.screenshot FROM screenshot_cache sc " +
+                "LEFT JOIN location l ON l.origin_id = sc.origin_id AND l.path_id = sc.path_id " +
+                "LEFT JOIN origin o ON o.id = sc.origin_id " +
+                "WHERE sc.date > ? " +
+                "ORDER BY sc.date DESC " +
+                "LIMIT ?")
+        List<Screenshot> getN(int n, long after);
     }
 
     public static class Screenshot {
@@ -407,12 +446,12 @@ public class Database implements AutoCloseable {
         public final Url url;
         public final byte[] screenshot;
 
-        public Screenshot(ResultSet rs) throws SQLException {
-            this.originId = rs.getLong("origin_id");
-            this.pathId = rs.getLong("path_id");
-            this.date = Instant.ofEpochMilli(rs.getLong("date"));
-            this.url = new Url(rs.getString("origin") + rs.getString("path"));
-            this.screenshot = rs.getBytes("screenshot");
+        public Screenshot(long originId, long pathId, Instant date, String origin, String path, byte[] screenshot) {
+            this.originId = originId;
+            this.pathId = pathId;
+            this.date = date;
+            this.url = new Url(origin + path);
+            this.screenshot = screenshot;
         }
 
         public String screenshotDataUrl() {
@@ -420,7 +459,7 @@ public class Database implements AutoCloseable {
         }
     }
 
-    public class CdxLine {
+    public static class CdxLine {
         private final Instant date;
         private final String url;
         private final String contentType;
@@ -430,16 +469,17 @@ public class Database implements AutoCloseable {
         private final long position;
         private final UUID warcId;
 
-        CdxLine(ResultSet rs) throws SQLException {
-            date = getInstant(rs, "date");
-            url = rs.getString("url");
-            contentType = rs.getString("content_type");
-            status = rs.getInt("status");
-            byte[] digest = rs.getBytes("response_payload_digest");
-            payloadDigest = digest == null ? null : Arrays.copyOf(digest, 20); // XXX: pad out to match sha1 length
-            length = rs.getLong("response_length");
-            position = rs.getLong("response_position");
-            warcId = getUUID(rs, "warc_id");
+        public CdxLine(Instant date, String url, String contentType, int status, byte[] responsePayloadDigest,
+                       long responseLength, long responsePosition, UUID warcId) {
+            this.date = date;
+            this.url = url;
+            this.contentType = contentType;
+            this.status = status;
+            byte[] digest  = responsePayloadDigest;
+            this.payloadDigest = digest == null ? null : Arrays.copyOf(digest, 20); // XXX: pad out to match sha1 length
+            this.length = responseLength;
+            this.position = responsePosition;
+            this.warcId = warcId;
         }
 
         public String toString() {
@@ -449,70 +489,31 @@ public class Database implements AutoCloseable {
         }
     }
 
-    public class SessionDAO {
-        public Optional<Webapp.Session> find(String sessionId) {
-            return query.select("SELECT id, username, role, oidc_state, expiry FROM session WHERE id = ?").params(sessionId)
-                    .firstResult((ResultSet rs) -> new Webapp.Session(
-                            rs.getString("id"),
-                            rs.getString("username"),
-                            rs.getString("role"),
-                            rs.getString("oidc_state"),
-                            getInstant(rs, "expiry")));
-        }
+    @RegisterConstructorMapper(Webapp.Session.class)
+    public interface SessionDAO {
+        @SqlQuery("SELECT id, username, role, oidc_state, expiry FROM session WHERE id = ?")
+        Optional<Webapp.Session> find(String sessionId);
 
-        public void insert(String id, String oidcState, Instant expiry) {
-            query.update("INSERT INTO session (id, oidc_state, expiry) VALUES (?, ?, ?)")
-                    .params(id, oidcState, expiry).run();
-        }
+        @SqlUpdate("INSERT INTO session (id, oidc_state, expiry) VALUES (?, ?, ?)")
+        void insert(String id, String oidcState, Instant expiry);
 
-        public void update(String sessionId, String username, String role) {
-            check(query.update("UPDATE session SET username = ?, role = ? WHERE id = ?").params(username, role, sessionId).run());
-        }
+        @SqlUpdate("UPDATE session SET username = :username, role = :role WHERE id = :sessionId")
+        void update(String sessionId, String username, String role);
 
-        public void expire() {
-            query.update("DELETE FROM session WHERE expiry < ?").params(Instant.now()).run();
+        @SqlUpdate("DELETE FROM session WHERE expiry < ?")
+        void _expire(Instant since);
+
+        default void expire() {
+            _expire(Instant.now());
         }
     }
 
-    public class WarcDAO {
-        public void insert(UUID id, String path, Instant created) {
-            query.update("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)").params(toBytes(id), path, created.toEpochMilli()).run();
-        }
+    public interface WarcDAO {
+        @SqlUpdate("INSERT INTO warc (id, path, created) VALUES (?, ?, ?)")
+        void insert(UUID id, String path, Instant created);
 
-        public String findPath(UUID id) {
-            return query.select("SELECT path FROM warc WHERE id = ?").params(toBytes(requireNonNull(id))).singleResult(singleString());
-        }
-    }
-
-    private void check(UpdateResult result) {
-        if (result.affectedRows() == 0) {
-            throw new IllegalArgumentException("update failed");
-        }
-    }
-
-    public static Long getLongOrNull(ResultSet rs, String field) throws SQLException {
-        long value = rs.getLong(field);
-        return rs.wasNull() ? null : value;
-    }
-
-    public static Instant getInstant(ResultSet rs, String field) throws SQLException {
-        long value = rs.getLong(field);
-        return rs.wasNull() ? null : Instant.ofEpochMilli(value);
-    }
-
-    public List<Map<String, Object>> paginateCrawlLog(Instant after, boolean pagesOnly, int limit) {
-        return query.select("SELECT v.origin_id AS originId, v.path_id AS pathId, v.date, m.method, " +
-                "o.origin, l.path, v.status, ct.content_type, v.content_length " +
-                "FROM visit v " +
-                "LEFT JOIN location l ON l.origin_id = v.origin_id AND l.path_id = v.path_id " +
-                "LEFT JOIN origin o ON o.id = v.origin_id " +
-                "LEFT JOIN method m ON m.id = v.method_id " +
-                "LEFT JOIN content_type ct ON ct.id = v.content_type_id " +
-                "LEFT JOIN location_type lt ON lt.id = l.location_type_id " +
-                "WHERE v.date < ? " + (pagesOnly ? " AND lt.location_type = 'PAGE' " : "") +
-                "ORDER BY v.date DESC LIMIT ?")
-                .params(after, limit)
-                .listResult(Mappers.map());
+        @SqlQuery("SELECT path FROM warc WHERE id = ?")
+        String findPath(UUID id);
     }
 
     public static class IdGenerator {

@@ -359,7 +359,8 @@ public class Database implements AutoCloseable {
         }
 
         public Visit findClosest(long originId, long pathId, Instant closestDate, String method) {
-            Optional<Long> closest = query.select("SELECT date FROM visit WHERE origin_id = ? AND path_id = ? AND method_id = (SELECT id FROM method WHERE method = ?) " +
+            Optional<Long> closest = query.select("SELECT date FROM visit WHERE origin_id = ? AND path_id = ? " +
+                    "AND method_id = (SELECT id FROM method WHERE method = ?) AND STATUS > 0 AND STATUS <> 304 " +
                     "ORDER BY ABS(date - ?) DESC LIMIT 1")
                     .params(originId, pathId, method, closestDate.toEpochMilli()).firstResult(Mappers.singleLong());
             return closest.map(date -> find(originId, pathId, Instant.ofEpochMilli(date))).orElse(null);

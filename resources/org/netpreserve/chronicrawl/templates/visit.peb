@@ -25,4 +25,14 @@
     <a href="analyse?o={{ visit.originId }}&p={{ visit.pathId }}&d={{ visit.date.toEpochMilli }}" class="btn">Analyse</a>
 </nav>
 
+{% if requestHeader is not null %}
+    <h3>Request Headers</h3>
+    <pre>{{ requestHeader }}</pre>
+{% endif %}
+
+{% if responseHeader is not null %}
+    <h3>Response Headers</h3>
+    <pre>{{ responseHeader }}</pre>
+{% endif %}
+
 {% endblock %}

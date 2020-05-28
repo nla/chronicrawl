@@ -1,26 +1,28 @@
 package org.netpreserve.chronicrawl;
 
 import com.github.f4b6a3.uuid.UuidCreator;
+import org.apache.commons.io.IOUtils;
 import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.regex.Pattern;
 
+import static java.nio.charset.StandardCharsets.*;
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.WRITE;
 
@@ -149,10 +151,14 @@ public class Storage implements Closeable {
         return tmp[0];
     }
 
+    private FileChannel openWarc(UUID warcId) throws IOException {
+        String path = db.warcs.findPath(warcId);
+        if (path == null) throw new NoSuchFileException("warc " + warcId.toString());
+        return FileChannel.open(Paths.get(path));
+    }
+
     void readResponse(Visit visit, ResponseConsumer consumer) throws IOException {
-        String path = db.warcs.findPath(visit.warcId);
-        if (path == null) throw new NoSuchFileException("warc " + visit.warcId.toString());
-        try (FileChannel channel = FileChannel.open(Paths.get(path))) {
+        try (FileChannel channel = openWarc(visit.warcId)) {
             channel.position(visit.responsePosition);
             try (WarcReader warcReader = new WarcReader(channel)) {
                 WarcRecord record = warcReader.next().orElse(null);
@@ -172,6 +178,24 @@ public class Storage implements Closeable {
         }
     }
 
+    public String slurpHeaders(UUID warcId, long position) throws IOException {
+        String warcHeader;
+        String httpHeader = "";
+        try (FileChannel channel = openWarc(warcId)) {
+            channel.position(position);
+            warcHeader = new Scanner(channel, ISO_8859_1).useDelimiter(Pattern.compile("\r?\n\r?\n")).next();
+            channel.position(position);
+            WarcRecord record = new WarcReader(channel).next().orElse(null);
+            if (record instanceof WarcCaptureRecord) {
+                var body = record.body();
+                if (body != null) {
+                    httpHeader = new Scanner(body, ISO_8859_1).useDelimiter(Pattern.compile("\r?\n\r?\n")).next();
+                }
+            }
+        }
+        return warcHeader + "\r\n\r\n" + httpHeader;
+    }
+
     public interface ResponseConsumer {
         void accept(WarcTargetRecord record, WarcResponse response) throws IOException;
     }
@@ -182,7 +206,8 @@ public class Storage implements Closeable {
         parser.lenientResponse();
         ByteBuffer buffer = ByteBuffer.allocate(8192);
         while (!parser.isFinished() && !parser.isError()) {
-            channel.read(buffer);
+            int n = channel.read(buffer);
+            if (n < 0) break;
             buffer.flip();
             int start = buffer.position();
             parser.parse(buffer);

@@ -104,6 +104,7 @@ public class Analysis {
     }
 
     void browse(Crawl crawl, boolean recordMode) {
+        log.warn("Browsing {}", location.url);
         try (Browser.Tab tab = crawl.browser().createTab()) {
             if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(visitDate);
             tab.interceptRequests(request -> onRequestIntercepted(request, crawl, recordMode));

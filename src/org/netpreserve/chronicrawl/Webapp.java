@@ -96,14 +96,14 @@ public class Webapp extends NanoHTTPD implements Closeable {
         return s == null ? null : s.replace("&", "&amp;").replace("<", "&lt;");
     }
 
-    static class Session {
+    public static class Session {
         final String id;
         final String username;
         final String role;
         final String oidcState;
         final Instant expiry;
 
-        Session(String id, String username, String role, String oidcState, Instant expiry) {
+        public Session(String id, String username, String role, String oidcState, Instant expiry) {
             this.id = id;
             this.username = username;
             this.role = role;

@@ -10,10 +10,7 @@ import javax.xml.stream.XMLStreamException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.URI;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
@@ -133,8 +130,12 @@ public class Exchange implements Closeable {
             ip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getAddress();
             socket.getOutputStream().write(httpRequest.serializeHeader());
             socket.getInputStream().transferTo(Channels.newOutputStream(bufferFile));
+        } catch (UnknownHostException e) {
+            fetchStatus = Status.DNS_LOOKUP_FAILED;
+            log.debug("{} fetching {}", e, url);
+            return;
         } catch (IOException e) {
-            log.warn("Error fetching " + url, e);
+            log.debug("{} fetching {}", e, url);
             fetchStatus = Status.CONNECT_FAILED;
             return;
         }

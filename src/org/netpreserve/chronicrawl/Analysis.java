@@ -264,6 +264,7 @@ public class Analysis {
         source.setURI(baseUrl);
         source.setCharacterStream(new StringReader(value));
         SACParserCSS3 parser = new SACParserCSS3();
+        parser.setErrorHandler(new StyleErrorHandler());
         parser.setDocumentHandler(new StyleHandler(baseUrl));
         try {
             parser.parseStyleSheet(source);
@@ -277,6 +278,7 @@ public class Analysis {
         source.setURI(baseUrl);
         source.setCharacterStream(new StringReader(value));
         SACParserCSS3 parser = new SACParserCSS3();
+        parser.setErrorHandler(new StyleErrorHandler());
         parser.setDocumentHandler(new StyleHandler(baseUrl));
         try {
             parser.parseStyleDeclaration(source);
@@ -320,6 +322,20 @@ public class Analysis {
                     addResource(StringUtil.resolve(baseUrl, unit.getStringValue()), type);
                 }
             }
+        }
+    }
+
+    private static class StyleErrorHandler extends HandlerBase {
+        @Override
+        public void warning(CSSParseException exception) throws CSSException {
+        }
+
+        @Override
+        public void error(CSSParseException exception) throws CSSException {
+        }
+
+        @Override
+        public void fatalError(CSSParseException exception) throws CSSException {
         }
     }
 

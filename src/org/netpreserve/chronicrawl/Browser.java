@@ -62,7 +62,7 @@ public class Browser implements Closeable {
 
     public boolean alive() {
         try {
-            call("Browser.version", Map.of());
+            call("Browser.getVersion", Map.of());
             return true;
         } catch (Exception e) {
             return false;

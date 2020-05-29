@@ -2,6 +2,7 @@ package org.netpreserve.chronicrawl;
 
 import com.steadystate.css.parser.HandlerBase;
 import com.steadystate.css.parser.SACParserCSS3;
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.jsoup.Jsoup;
 import org.jsoup.internal.StringUtil;
 import org.jsoup.nodes.Document;
@@ -103,7 +104,7 @@ public class Analysis {
     }
 
     void browse(Crawl crawl, boolean recordMode) {
-        try (Browser.Tab tab = crawl.browser.createTab()) {
+        try (Browser.Tab tab = crawl.browser().createTab()) {
             if (crawl.config.scriptDeterminism) tab.overrideDateAndRandom(visitDate);
             tab.interceptRequests(request -> onRequestIntercepted(request, crawl, recordMode));
             try {
@@ -123,6 +124,7 @@ public class Analysis {
 
             tab.extractLinks().forEach(link -> addLink(new Url(link)));
             title = tab.title();
+        } catch (WebsocketNotConnectedException e) {
         }
     }
 

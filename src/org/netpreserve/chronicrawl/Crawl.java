@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -19,7 +20,7 @@ public class Crawl implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Crawl.class);
     final Config config;
     final Database db;
-    final Browser browser;
+    private Browser browser;
     final Storage storage;
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
     final AtomicBoolean paused = new AtomicBoolean(true);
@@ -33,6 +34,21 @@ public class Crawl implements Closeable {
         browser = new Browser();
         pywb = new Pywb(config);
         httpClient = HttpAsyncClients.createDefault();
+    }
+
+    public synchronized Browser browser() {
+        if (!browser.alive()) {
+            log.error("Browser seems to have crashed, restarting it.");
+            browser.close();
+            try {
+                browser = new Browser();
+            } catch (IOException e) {
+                log.error("Restarting browser failed. Pausing crawl.", e);
+                paused.set(true);
+                throw new UncheckedIOException(e);
+            }
+        }
+        return browser;
     }
 
     public void addSeed(String url) {

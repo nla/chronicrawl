@@ -116,6 +116,10 @@ public class Config implements Iterable<Config.Entry> {
     @Section("Crawler")
     boolean scriptDeterminism = true;
 
+
+    @Section("Crawler")
+    boolean newHttpClient = false;
+
     /**
      * Digest algorithm to use when calculating payload digest
      */

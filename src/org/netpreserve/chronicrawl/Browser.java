@@ -2,6 +2,7 @@ package org.netpreserve.chronicrawl;
 
 import com.grack.nanojson.*;
 import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ServerHandshake;
 import org.netpreserve.jwarc.WarcResponse;
 import org.slf4j.Logger;
@@ -56,6 +57,15 @@ public class Browser implements Closeable {
             websocket.connectBlocking();
         } catch (InterruptedException e) {
             throw new IOException("Connect interrupted", e);
+        }
+    }
+
+    public boolean alive() {
+        try {
+            call("Browser.version", Map.of());
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 

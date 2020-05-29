@@ -138,7 +138,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /":
                     requireRole("admin");
                     return render(View.home, "paused", crawl.paused.get(),
-                            "screenshots", crawl.db.screenshotCache.getN(12, 0));
+                            "screenshots", crawl.db.screenshotCache.getN(0, 12));
                 case "GET /analyse": {
                     requireRole("admin");
                     long originId = paramLong("o");
@@ -264,7 +264,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /recent.json": {
                     requireRole("admin");
                     var json = JsonWriter.string().array();
-                    for (var screenshot : db.screenshotCache.getN(5, paramLong("after", 0L))) {
+                    for (var screenshot : db.screenshotCache.getN(paramLong("after", 0L), 5)) {
                         json.object()
                                 .value("originId", Long.toString(screenshot.originId))
                                 .value("pathId", Long.toString(screenshot.pathId))

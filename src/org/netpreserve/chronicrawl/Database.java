@@ -436,7 +436,7 @@ public class Database implements AutoCloseable {
                 "WHERE sc.date > ? " +
                 "ORDER BY sc.date DESC " +
                 "LIMIT ?")
-        List<Screenshot> getN(int n, long after);
+        List<Screenshot> getN(long after, int n);
     }
 
     public static class Screenshot {

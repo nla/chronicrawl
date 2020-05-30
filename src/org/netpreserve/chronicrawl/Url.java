@@ -5,6 +5,7 @@ import net.jpountz.xxhash.XXHashFactory;
 import org.netpreserve.urlcanon.Canonicalizer;
 import org.netpreserve.urlcanon.ParsedUrl;
 
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -103,11 +104,11 @@ public class Url implements Comparable<Url> {
         return parsed.getHost() + parsed.getColonBeforePort() + parsed.getPort();
     }
 
-    public Socket connect(InetAddress bindAddress) throws IOException {
+    public Socket connect(InetAddress bindAddress, SSLSocketFactory sslSocketFactory) throws IOException {
         if ("http".equalsIgnoreCase(scheme())) {
             return new Socket(host(), port() < 0 ? 80 : port(), bindAddress, 0);
         } else if ("https".equalsIgnoreCase(scheme())) {
-            return SSLSocketFactory.getDefault().createSocket(host(), port() < 0 ? 443 : port());
+            return sslSocketFactory.createSocket(host(), port() < 0 ? 443 : port());
         } else {
             throw new IllegalArgumentException("Unsupported URI scheme: " + scheme());
         }

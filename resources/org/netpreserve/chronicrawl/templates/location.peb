@@ -1,3 +1,6 @@
+{# @pebvariable name="visits" type="java.util.List<org.netpreserve.chronicrawl.Visit>" #}
+{# @pebvariable name="location" type="org.netpreserve.chronicrawl.Location" #}
+
 {% extends "./layout.peb" %}
 
 {% block content %}
@@ -20,16 +23,23 @@
 </nav>
 
 <h3>Visits</h3>
-<table>
-    {% for visit in visits %}
-        <tr>
-            <td><a href="{{ visit.href }}">{{ visit.date }}</a> </td>
-            <td>{{ visit.method }}</td>
-            <td>{{ visit.status }}</td>
-            <td>{{ visit.contentType }}</td>
-            <td>{{ visit.contentLength }}</td>
-            <td>{% if visit.revisitOfDate is not null %}(not modified){% endif %}</td>
-        </tr>
-    {% endfor %}
-</table>
+<form action=diff>
+    <input type=hidden name=o value="{{ location.originId }}">
+    <input type=hidden name=p value="{{ location.pathId }}">
+    <table>
+        {% for visit in visits %}
+            <tr>
+                <td><input type=radio name=d1 value="{{ visit.date.toEpochMilli() }}"></td>
+                <td><input type=radio name=d2 value="{{ visit.date.toEpochMilli() }}"></td>
+                <td><a href="{{ visit.href }}">{{ visit.date }}</a> </td>
+                <td>{{ visit.method }}</td>
+                <td>{{ visit.status }}</td>
+                <td>{{ visit.contentType }}</td>
+                <td>{{ visit.contentLength }}</td>
+                <td>{% if visit.revisitOfDate is not null %}(not modified){% endif %}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    <button class=btn type=submit>Diff</button>
+</form>
 {% endblock %}

@@ -2,6 +2,10 @@ package org.netpreserve.chronicrawl;
 
 import com.github.f4b6a3.uuid.UuidCreator;
 import org.apache.commons.io.IOUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.select.NodeVisitor;
 import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -194,6 +198,27 @@ public class Storage implements Closeable {
             }
         }
         return warcHeader + "\r\n\r\n" + httpHeader;
+    }
+
+    public String text(Visit visit) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        readResponse(visit, (r, rsp) ->
+                Jsoup.parse(rsp.payload().orElseThrow().body().stream(), null, r.target())
+                        .traverse(
+                                new NodeVisitor() {
+                                    public void head(Node node, int depth) {
+                                        if (node instanceof TextNode) sb.append(((TextNode) node).text());
+                                        else if (Set.of("p", "h1", "h2", "h3", "h4", "h5", "tr", "li").contains(node.nodeName()))
+                                            sb.append("\n");
+                                    }
+
+                                    @Override
+                                    public void tail(Node node, int depth) {
+                                        if (Set.of("br", "dd", "dt", "p", "h1", "h2", "h3", "h4", "h5").contains(node.nodeName()))
+                                            sb.append("\n");
+                                    }
+                                }));
+        return sb.toString();
     }
 
     public interface ResponseConsumer {

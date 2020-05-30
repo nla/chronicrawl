@@ -17,7 +17,7 @@ public class Chronicrawl {
                     break;
                 case "-h":
                 case "--help":
-                    System.out.println("Usage: trickler [-c configfile]");
+                    System.out.println("Usage: chronicrawl [-c configfile]");
                     System.out.println("");
                     System.out.println("-c, --config FILE  Load config from properties file");
                     System.out.println("-h, --help         Print this help");

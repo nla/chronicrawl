@@ -130,7 +130,7 @@ public class Config implements Iterable<Config.Entry> {
      * Template for construct WARC filenames. Variables: {TIMESTAMP} {SEQNO}
      */
     @Section("Storage")
-    String warcFilename = "data/trickler-{TIMESTAMP}-{SEQNO}.warc";
+    String warcFilename = "data/chronicrawl-{TIMESTAMP}-{SEQNO}.warc";
 
     /**
      * Format of the {TIMESTAMP} variable in warcFilename

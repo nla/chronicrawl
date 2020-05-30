@@ -126,7 +126,8 @@ public class Exchange implements Closeable {
 
         log.info("Fetching {}", url);
         httpRequest = builder.build();
-        try (Socket socket = url.connect(crawl.config.bindAddress)) {
+
+        try (Socket socket = url.connect(crawl.config.bindAddress, crawl.sslSocketFactory)) {
             ip = ((InetSocketAddress) socket.getRemoteSocketAddress()).getAddress();
             socket.getOutputStream().write(httpRequest.serializeHeader());
             socket.getInputStream().transferTo(Channels.newOutputStream(bufferFile));

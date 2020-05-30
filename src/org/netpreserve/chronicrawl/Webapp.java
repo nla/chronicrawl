@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 import static fi.iki.elonen.NanoHTTPD.Response.Status.*;
 import static java.lang.Integer.parseInt;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.unbescape.html.HtmlEscape.escapeHtml5;
 
 public class Webapp extends NanoHTTPD implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Webapp.class);
@@ -171,6 +172,35 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /debug": {
                     requireRole("admin");
                     return render(View.debug);
+                }
+                case "GET /diff": {
+                    requireRole("admin");
+                    Visit visit1 = db.visits.find(paramLong("o"), paramLong("p"), Instant.ofEpochMilli(paramLong("d1")));
+                    Visit visit2 = db.visits.find(paramLong("o"), paramLong("p"), Instant.ofEpochMilli(paramLong("d2")));
+                    String text1 = crawl.storage.text(visit1);
+                    String text2 = crawl.storage.text(visit2);
+                    var dmp = new DiffMatchPatch();
+                    var diff = dmp.diff_main(text1, text2);
+                    dmp.diff_cleanupSemantic(diff);
+                    StringBuilder sb = new StringBuilder();
+                    sb.append("<!doctype html><style>strike { color: red; } u { color: green; }</style>");
+                    sb.append("<div style='white-space: pre-wrap'>");
+                    for (var fragment : diff) {
+                        switch (fragment.operation) {
+                            case EQUAL:
+                                sb.append(escapeHtml5(fragment.text));
+                                break;
+                            case DELETE:
+                                sb.append("<strike>").append(escapeHtml5(fragment.text)).append("</strike>");
+                                break;
+                            case INSERT:
+                                sb.append("<u>").append(escapeHtml5(fragment.text)).append("</u>");
+                                break;
+                        }
+                    }
+                    sb.append("</div>");
+                    return newFixedLengthResponse(OK, "text/html", sb.toString());
+
                 }
                 case "POST /debug/load-dummy-data": {
                     requireRole("admin");
@@ -385,7 +415,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     db.schedules.delete(paramLong("id"));
                     return seeOther(contextPath + "/settings/schedules", "Schedule deleted.");
                 }
-                case "GET /visit":
+                case "GET /visit": {
                     requireRole("admin");
                     Visit visit = db.visits.find(paramLong("o"), paramLong("p"), Instant.ofEpochMilli(paramLong("d")));
                     if (visit == null) throw new NotFound();
@@ -395,6 +425,13 @@ public class Webapp extends NanoHTTPD implements Closeable {
                             "replayUrl", crawl.pywb.replayUrl(location.url, visit.date),
                             "requestHeader", visit.warcId == null ? null : crawl.storage.slurpHeaders(visit.warcId, visit.requestPosition),
                             "responseHeader", visit.warcId == null ? null : crawl.storage.slurpHeaders(visit.warcId, visit.responsePosition));
+                }
+                case "GET /visit/text": {
+                    requireRole("admin");
+                    Visit visit = db.visits.find(paramLong("o"), paramLong("p"), Instant.ofEpochMilli(paramLong("d")));
+                    if (visit == null) throw new NotFound();
+                    return newFixedLengthResponse(Response.Status.OK, "text/plain", crawl.storage.text(visit));
+                }
                 default:
                     throw new NotFound();
             }

@@ -5,9 +5,12 @@ import org.apache.hc.client5.http.impl.async.HttpAsyncClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -20,6 +23,7 @@ public class Crawl implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Crawl.class);
     final Config config;
     final Database db;
+    final SSLSocketFactory sslSocketFactory;
     private Browser browser;
     final Storage storage;
     final Set<Exchange> exchanges = ConcurrentHashMap.newKeySet();
@@ -34,6 +38,11 @@ public class Crawl implements Closeable {
         browser = new Browser();
         pywb = new Pywb(config);
         httpClient = HttpAsyncClients.createDefault();
+        try {
+            sslSocketFactory = SSLContext.getDefault().getSocketFactory();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException(e);
+        }
     }
 
     public synchronized Browser browser() {

@@ -2,8 +2,6 @@ package org.netpreserve.chronicrawl;
 
 import org.jdbi.v3.core.mapper.reflect.JdbiConstructor;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 
 public class Location {

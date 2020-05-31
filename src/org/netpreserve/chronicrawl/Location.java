@@ -31,6 +31,19 @@ public class Location {
         this.nextVisit = nextVisit;
     }
 
+    public Location(Url url) {
+        originId = url.originId();
+        pathId = url.pathId();
+        this.url = url;
+        type = Type.PAGE;
+        depth = 0;
+        viaOriginId = null;
+        viaPathId = null;
+        discovered = Instant.now();
+        lastVisit = null;
+        nextVisit = null;
+    }
+
     public String href() {
         return "location?o=" + originId + "&p=" + pathId;
     }

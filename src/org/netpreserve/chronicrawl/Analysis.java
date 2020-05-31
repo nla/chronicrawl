@@ -2,15 +2,13 @@ package org.netpreserve.chronicrawl;
 
 import com.steadystate.css.parser.HandlerBase;
 import com.steadystate.css.parser.SACParserCSS3;
-import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.jsoup.Jsoup;
 import org.jsoup.internal.StringUtil;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.select.NodeVisitor;
-import org.netpreserve.jwarc.WarcResponse;
-import org.netpreserve.jwarc.WarcTargetRecord;
+import org.netpreserve.jwarc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.css.sac.*;
@@ -33,6 +31,7 @@ public class Analysis {
     private static final Pattern SRCSET = Pattern.compile("[\\s,]*(\\S*[^,\\s])(?:\\s(?:[^,(]+|\\([^)]*(?:\\)|$))*)?", Pattern.MULTILINE);
     private static final Pattern META_REFRESH = Pattern.compile("\\d+\\s*;\\s*url=['\"]?(.*?)['\"]?");
     private static final boolean extraAttrs = true;
+    static final MediaType CSS = MediaType.parse("text/css");
 
     private final Map<String, Resource> resourceMap = new ConcurrentSkipListMap<>();
     private final Set<Url> links = new ConcurrentSkipListSet<>();
@@ -51,7 +50,7 @@ public class Analysis {
         this.location = location;
         visitDate = date;
         Visit visit = crawl.db.visits.find(location.originId, location.pathId, date);
-        crawl.storage.readResponse(visit, this::parseHtml);
+        crawl.storage.readResponse(visit, this::parsePayload);
         if (hasScript) {
             browse(crawl, recordMode);
         }
@@ -125,7 +124,6 @@ public class Analysis {
 
             tab.extractLinks().forEach(link -> addLink(new Url(link)));
             title = tab.title();
-        } catch (WebsocketNotConnectedException e) {
         }
     }
 
@@ -257,6 +255,7 @@ public class Analysis {
 
     private void addLink(String url) {
         if (url.isBlank()) return;
+        url = StringUtil.resolve(location.url.toString(), url);
         addLink(new Url(url));
     }
 
@@ -264,6 +263,17 @@ public class Analysis {
         InputSource source = new InputSource();
         source.setURI(baseUrl);
         source.setCharacterStream(new StringReader(value));
+        parseStyleSheet(source, baseUrl);
+    }
+
+    private void parseStyleSheet(InputStream stream, String baseUrl) {
+        InputSource source = new InputSource();
+        source.setURI(baseUrl);
+        source.setByteStream(stream);
+        parseStyleSheet(source, baseUrl);
+    }
+
+    private void parseStyleSheet(InputSource source, String baseUrl) {
         SACParserCSS3 parser = new SACParserCSS3();
         parser.setErrorHandler(new StyleErrorHandler());
         parser.setDocumentHandler(new StyleHandler(baseUrl));
@@ -288,9 +298,25 @@ public class Analysis {
         }
     }
 
-    public void parseHtml(WarcTargetRecord record, WarcResponse response) throws IOException {
-        parseHtml(response.http().body().stream(), response.http().contentType().parameters().get("charset"),
-                record.target());
+    public void parsePayload(WarcTargetRecord record, WarcResponse response) throws IOException {
+        HttpResponse http;
+        if (record instanceof WarcRevisit) {
+            http = ((WarcRevisit) record).http();
+        } else if (record instanceof WarcResponse) {
+            http = ((WarcResponse) record).http();
+        } else {
+            log.warn("Expected response or revisit record not {}", record.type());
+            return;
+        }
+        http.headers().first("Location").ifPresent(this::addLink);
+        MediaType contentType = http.contentType().base();
+        if (contentType.equals(MediaType.HTML)) {
+            // we use response.http().body() not http.body() to ensure we're using the body resolved from revisits
+            parseHtml(response.http().body().stream(), response.http().contentType().parameters().get("charset"),
+                    record.target());
+        } else if (contentType.equals(CSS)) {
+            parseStyleSheet(response.http().body().stream(), record.target());
+        }
     }
 
     private class StyleHandler extends HandlerBase {

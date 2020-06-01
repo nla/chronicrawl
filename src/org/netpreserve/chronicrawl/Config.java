@@ -17,6 +17,7 @@ import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -108,6 +109,32 @@ public class Config implements Iterable<Config.Entry> {
      */
     @Section("Crawler")
     int maxDepth = 10;
+
+    /**
+     * Minimum duration between revisits. Only affects automatic scheduling not fixed scheduling rules.
+     */
+    @Section("Crawler")
+    Duration minRevisit = Duration.ofDays(1);
+
+    /**
+     * Maximum duration between revisits. Only affects automatic scheduling not fixed scheduling rules.
+     */
+    @Section("Crawler")
+    Duration maxRevisit = Duration.ofDays(365);
+
+    /**
+     * Initial duration between revisits for HTML.
+     * Only affects automatic scheduling not fixed scheduling rules.
+     */
+    @Section("Crawler")
+    Duration initialRevisitHtml = Duration.ofDays(2);
+
+    /**
+     * Initial duration between revisits for everything except HTML.
+     * Only affects automatic scheduling not fixed scheduling rules.
+     */
+    @Section("Crawler")
+    Duration initialRevisitOther = Duration.ofDays(7);
 
     /**
      * Override Date and Math.random to try to make scripts more deterministic (beware: this currently freezes time and
@@ -272,8 +299,6 @@ public class Config implements Iterable<Config.Entry> {
                 field.setBoolean(this, Boolean.parseBoolean(value));
             } else if (field.getType().equals(Integer.class)) {
                 field.set(this, Integer.parseInt(value));
-            } else if (field.getType().equals(Integer.TYPE)) {
-                field.setInt(this, Integer.parseInt(value));
             } else if (field.getType().equals(Long.TYPE)) {
                 field.setLong(this, Long.parseLong(value));
             } else if (field.getType().equals(DateTimeFormatter.class)) {
@@ -284,6 +309,8 @@ public class Config implements Iterable<Config.Entry> {
                 } catch (UnknownHostException e) {
                     throw new RuntimeException("Unable to resolve " + value, e);
                 }
+            } else if (field.getType().equals(Duration.class)) {
+                field.set(this, Duration.parse(value));
             } else {
                 throw new UnsupportedOperationException("Type conversion not implemented for " + field.getType());
             }

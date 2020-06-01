@@ -24,6 +24,7 @@ import java.time.ZoneId;
 import java.util.*;
 
 import static java.nio.file.StandardOpenOption.*;
+import static org.netpreserve.jwarc.MediaType.HTML;
 
 public class Exchange implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Exchange.class);
@@ -32,7 +33,6 @@ public class Exchange implements Closeable {
             "if-modified-since", "referer", "te", "keep-alive", "proxy-authenticate", "proxy-authorization",
             "ugprade-insecure-requests", "accept-encoding"
     );
-
     final Crawl crawl;
     final Origin origin;
     final Location location;
@@ -257,8 +257,8 @@ public class Exchange implements Closeable {
         }
 
         // if we've visited before adapt based on whether the content changed
-        Duration minDuration = Duration.ofDays(1);
-        Duration maxDuration = Duration.ofDays(365);
+        Duration minDuration = crawl.config.minRevisit;
+        Duration maxDuration = crawl.config.maxRevisit;
         if (location.lastVisit != null) {
             Duration duration = Duration.between(location.lastVisit, date);
             Duration nextDuration;
@@ -275,8 +275,13 @@ public class Exchange implements Closeable {
             return date.plus(nextDuration);
         }
 
-        // if we know nothing start off by revisiting frequently
-        return date.plus(minDuration);
+        // if we know nothing start off by revisiting html frequently
+        if (httpResponse != null && httpResponse.contentType().base().equals(HTML)) {
+            return date.plus(crawl.config.initialRevisitHtml);
+        }
+
+        // and other media types a little less frequently
+        return date.plus(crawl.config.initialRevisitOther);
      }
 
     private long calcDelayMillis() {

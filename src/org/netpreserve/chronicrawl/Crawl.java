@@ -63,9 +63,9 @@ public class Crawl implements Closeable {
     public void addSeed(String url) {
         Url crawlUrl = new Url(url);
         Instant now = Instant.now();
-        if (db.origins.tryInsert(crawlUrl.originId(), crawlUrl.origin(), now, CrawlPolicy.CONTINUOUS)) {
-            db.locations.tryInsert(crawlUrl.resolve("/robots.txt"), Location.Type.ROBOTS, null, 0, now);
-        }
+        db.origins.tryInsert(crawlUrl.originId(), crawlUrl.origin(), now, CrawlPolicy.CONTINUOUS);
+        db.origins.updateCrawlPolicy(crawlUrl.originId(), CrawlPolicy.CONTINUOUS);
+        db.locations.tryInsert(crawlUrl.resolve("/robots.txt"), Location.Type.ROBOTS, null, 0, now);
         db.locations.tryInsert(crawlUrl, Location.Type.PAGE, null, 0, now);
     }
 

@@ -1,6 +1,6 @@
 new Promise(function (resolve, reject) {
     var f = function () {
-        window.scrollBy(0, window.innerHeight / 2);
+        window.scrollBy({ left: 0, top: window.innerHeight / 2, behavior: 'instant'});
         if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight) {
             resolve();
         } else {

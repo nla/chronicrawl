@@ -74,9 +74,7 @@ public class Crawl implements Closeable {
         if (depth > config.maxDepth) return;
 
         if (db.origins.tryInsert(targetUrl.originId(), targetUrl.origin(), date, CrawlPolicy.TRANSCLUSIONS)) {
-            if (type == Location.Type.PAGE) {
-//                db.locations.tryInsert(targetUrl.resolve("/robots.txt"), Location.Type.ROBOTS, targetUrl.id(), date, 1);
-            }
+            db.locations.tryInsert(targetUrl.resolve("/robots.txt"), Location.Type.ROBOTS, null, 0, date);
         }
         db.locations.tryInsert(targetUrl, type, via.url, via == null ? 0 : via.depth + 1, date);
     }

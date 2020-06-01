@@ -77,7 +77,9 @@ public class Exchange implements Closeable {
     }
 
     public void run() throws IOException {
-        if (crawl.config.ignoreRobots || parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url.toString())) {
+        if (crawl.config.robotsPolicy == RobotsPolicy.IGNORE ||
+                (crawl.config.robotsPolicy == RobotsPolicy.PAGES_ONLY && location.type != Location.Type.PAGE) ||
+                parseRobots(origin.name + "/robots.txt", origin.robotsTxt).isAllowed(location.url.toString())) {
             fetch();
             crawl.storage.save(this);
         } else {

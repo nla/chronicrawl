@@ -93,10 +93,10 @@ public class Config implements Iterable<Config.Entry> {
     int maxRobotsBytes = 512 * 1024;
 
     /**
-     * Ignore robots.txt
+     * When to obey robots.txt.
      */
     @Section("Crawler")
-    boolean ignoreRobots = false;
+    RobotsPolicy robotsPolicy = RobotsPolicy.PAGES_ONLY;
 
     /**
      * Maximum delay between requests
@@ -289,6 +289,7 @@ public class Config implements Iterable<Config.Entry> {
         }
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void set(Field field, String value) {
         try {
             if (field.getType().equals(Integer.TYPE)) {
@@ -311,6 +312,8 @@ public class Config implements Iterable<Config.Entry> {
                 }
             } else if (field.getType().equals(Duration.class)) {
                 field.set(this, Duration.parse(value));
+            } else if (field.getType().isEnum()) {
+                field.set(this, Enum.valueOf((Class)field.getType(), value));
             } else {
                 throw new UnsupportedOperationException("Type conversion not implemented for " + field.getType());
             }

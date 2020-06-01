@@ -1,7 +1,6 @@
 package org.netpreserve.chronicrawl;
 
 import com.github.f4b6a3.uuid.UuidCreator;
-import org.apache.commons.io.IOUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
@@ -12,12 +11,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -26,7 +23,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.regex.Pattern;
 
-import static java.nio.charset.StandardCharsets.*;
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.WRITE;
 
@@ -116,25 +113,27 @@ public class Storage implements Closeable {
         }
 
         WarcDigest payloadDigest = new WarcDigest(config.warcDigestAlgorithm, exchange.digest);
-        Visit duplicate = db.visits.findByResponsePayloadDigest(exchange.location.originId, exchange.location.pathId, exchange.digest);
-        if (config.dedupeDigest && duplicate != null) {
-            try {
-                WarcResponse priorResponse = readResponseHeader(duplicate);
-                // we recheck the digest in the record as the database only keeps a truncated digest
-                if (priorResponse.payloadDigest().equals(Optional.of(payloadDigest))) {
-                    exchange.revisitOf = duplicate;
-                    return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.IDENTICAL_PAYLOAD_DIGEST_1_1)
-                            .version(MessageVersion.WARC_1_1)
-                            .recordId(responseId)
-                            .date(exchange.date)
-                            .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
-                            .concurrentTo(request.id())
-                            .ipAddress(exchange.ip)
-                            .refersTo(priorResponse.id(), priorResponse.targetURI(), priorResponse.date())
-                            .build();
+        if (config.dedupeDigest && exchange.contentLength >= config.dedupeMinLength) {
+            Visit duplicate = db.visits.findByResponsePayloadDigest(exchange.location.originId, exchange.location.pathId, exchange.digest);
+            if (duplicate != null) {
+                try {
+                    WarcResponse priorResponse = readResponseHeader(duplicate);
+                    // we recheck the digest in the record as the database only keeps a truncated digest
+                    if (priorResponse.payloadDigest().equals(Optional.of(payloadDigest))) {
+                        exchange.revisitOf = duplicate;
+                        return new WarcRevisit.Builder(exchange.url.toURI(), WarcRevisit.IDENTICAL_PAYLOAD_DIGEST_1_1)
+                                .version(MessageVersion.WARC_1_1)
+                                .recordId(responseId)
+                                .date(exchange.date)
+                                .body(MediaType.HTTP_RESPONSE, readHeaderOnly(exchange.bufferFile))
+                                .concurrentTo(request.id())
+                                .ipAddress(exchange.ip)
+                                .refersTo(priorResponse.id(), priorResponse.targetURI(), priorResponse.date())
+                                .build();
+                    }
+                } catch (IOException e) {
+                    log.warn("Failed reading prior record", e);
                 }
-            } catch (IOException e) {
-                log.warn("Failed reading prior record", e);
             }
         }
 

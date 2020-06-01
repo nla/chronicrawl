@@ -157,6 +157,12 @@ public class Config implements Iterable<Config.Entry> {
     boolean dedupeDigest = true;
 
     /**
+     * Threshold below which record payloads are considered too small for deduplication.
+     */
+    @Section("Storage")
+    long dedupeMinLength = 64;
+
+    /**
      * URL of the auth server (realm) to enable OpenID Connect authentication
      */
     @Section("User Interface")

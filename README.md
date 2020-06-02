@@ -12,10 +12,10 @@ Chronicrawl is at an early stage of development but is (barely) usable for basic
 Currently it:
 
 * keeps the crawl state in an embedded ~~H2~~ Sqlite SQL database (still experimenting with db options, it currently
-  uses a fairly portable subset of SQL)
+  uses a fairly portable subset of SQL and likely will target both an embedded and an clustered database)
 * fetches robots.txt and discover URLs via sitemaps and links
 * discovers subresources by parsing HTML and also loading in Headless Chromium when script tags are detected
-* periodically revisits resources (schedule currently hardcoded)
+* periodically revisits resources (both fine-grained manual and basic automatic scheduling using a content change heuristic)
 * writes WARC records (with both server not modified and identical digest dedupe)
 * shows a primitive UI for exploring the state of the crawl and examining the content analysis
 * replays archived content using Pywb
@@ -24,7 +24,6 @@ but many serious limitations still need to be addressed:
 
 * the main crawl loop is single-threaded
 * error handling is incomplete
-* the revisit schedule is hardcoded
 * there's no real prioritisation system yet
 * only a little effort has been put into performance so far
 * it only speaks HTTP/1.0 without keep-alive

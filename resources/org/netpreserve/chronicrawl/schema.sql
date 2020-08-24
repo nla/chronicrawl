@@ -135,6 +135,9 @@ CREATE TABLE visit
     FOREIGN KEY (origin_id, path_id, revisit_of_date) REFERENCES visit
 );
 
+-- index for crawl log
+create index visit_date_index on visit (date);
+
 CREATE TABLE session
 (
     id         VARCHAR(30)  NOT NULL PRIMARY KEY,

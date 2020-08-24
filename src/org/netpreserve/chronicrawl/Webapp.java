@@ -254,7 +254,8 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     requireRole("admin");
                     boolean subresources = request.getParameters().containsKey("subresources");
                     Timestamp after = Optional.ofNullable(param("after", null))
-                            .map(Timestamp::valueOf).orElse(Timestamp.from(Instant.now()));
+                            .map(s -> Timestamp.from(Instant.ofEpochMilli(Long.parseLong(s))))
+                            .orElse(Timestamp.from(Instant.now()));
                     List<Map<String, Object>> log = subresources ? db.visits.paginateCrawlLog(after.toInstant(), 100) :
                             db.visits.paginateCrawlLogPagesOnly(after.toInstant(), 100);
                     return render(View.log, "log", log, "subresources", subresources, "after", param("after", null));

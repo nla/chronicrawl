@@ -50,7 +50,7 @@
     </form>
 </div>
 
-<img src="metrics.svg" style="width: 100%; margin-top: 16px">
+<img src="metrics.svg" style="width: 100%; margin-top: 20px; height: 100px">
 
 <h2>Recent captures</h2>
 <div class="screenshot-gimmick">

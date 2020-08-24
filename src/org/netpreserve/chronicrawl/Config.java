@@ -36,18 +36,21 @@ public class Config implements Iterable<Config.Entry> {
      * JDBC URL of database
      */
     @Section("Database")
+    @Hidden
     String dbUrl = "jdbc:sqlite:data/chronicrawl.sqlite3";
 
     /**
      * Database username
      */
     @Section("Database")
+    @Hidden
     String dbUser = "sa";
 
     /**
      * Database password
      */
     @Section("Database")
+    @Hidden
     String dbPassword = "";
 
     /**
@@ -333,7 +336,7 @@ public class Config implements Iterable<Config.Entry> {
         return Arrays.stream(getClass().getDeclaredFields())
                 .filter(field -> {
                     Section section = field.getAnnotation(Section.class);
-                    return !Modifier.isStatic(field.getModifiers()) && (section == null || !section.value().equals("Database"));
+                    return !Modifier.isStatic(field.getModifiers()) && field.getAnnotation(Hidden.class) == null;
                 })
                 .map(Entry::new).iterator();
     }
@@ -379,5 +382,10 @@ public class Config implements Iterable<Config.Entry> {
     @Retention(RetentionPolicy.RUNTIME)
     @interface Section {
         String value();
+    }
+
+    @Target({ElementType.FIELD})
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Hidden {
     }
 }

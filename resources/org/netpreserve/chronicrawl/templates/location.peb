@@ -37,6 +37,7 @@
                 <td>{{ visit.contentType }}</td>
                 <td>{{ visit.contentLength }}</td>
                 <td>{% if visit.revisitOfDate is not null %}(not modified){% endif %}</td>
+                <td>{{ visit.digestPreview() }}</td>
             </tr>
         {% endfor %}
     </table>

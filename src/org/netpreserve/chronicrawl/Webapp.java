@@ -225,10 +225,11 @@ public class Webapp extends NanoHTTPD implements Closeable {
                 case "GET /location": {
                     requireRole("admin");
                     Location location = db.locations.find(paramLong("o"), paramLong("p"));
+
                     return render(View.location, "location", location,
                             "via", location.viaOriginId == null || location.viaPathId == null ? null :
                                     db.locations.find(location.viaOriginId, location.viaPathId),
-                            "visits", db.visits.list(location.originId, location.pathId));
+                            "visits", crawl.listVisits(location));
                 }
                 case "POST /location/add": {
                     requireRole("admin");
@@ -481,8 +482,6 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     xml.writeEndElement();
                     xml.writeEndDocument();
                     return newFixedLengthResponse(OK, "image/svg+xml", sw.toString());
-
-
                 }
                 case "GET /visit": {
                     requireRole("admin");

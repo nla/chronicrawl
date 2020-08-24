@@ -1,8 +1,7 @@
 package org.netpreserve.chronicrawl;
 
-import javax.xml.crypto.Data;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import org.apache.commons.codec.binary.Hex;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -13,7 +12,7 @@ public class Visit {
     public final String method;
     public final int status;
     public final String contentType;
-    public final long contentLength;
+    public final Long contentLength;
     public final UUID warcId;
     public final long requestPosition;
     public final long requestLength;
@@ -23,7 +22,7 @@ public class Visit {
     public final byte[] responsePayloadDigest;
     public final Instant revisitOfDate;
 
-    public Visit(long originId, long pathId, Instant date, String method, int status, String contentType, long contentLength, UUID warcId, long requestPosition, long requestLength, byte[] requestPayloadDigest, long responsePosition, long responseLength, byte[] responsePayloadDigest, Instant revisitOfDate) {
+    public Visit(long originId, long pathId, Instant date, String method, int status, String contentType, Long contentLength, UUID warcId, long requestPosition, long requestLength, byte[] requestPayloadDigest, long responsePosition, long responseLength, byte[] responsePayloadDigest, Instant revisitOfDate) {
         this.originId = originId;
         this.pathId = pathId;
         this.date = date;
@@ -43,5 +42,10 @@ public class Visit {
 
     public String href() {
         return "visit?o=" + originId + "&p=" + pathId + "&d=" + date.toEpochMilli();
+    }
+
+    public String digestPreview() {
+        if (responsePayloadDigest == null) return "";
+        return new Hex().encodeHexString(responsePayloadDigest).substring(0, 8);
     }
 }

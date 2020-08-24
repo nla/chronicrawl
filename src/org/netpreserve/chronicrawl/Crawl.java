@@ -13,9 +13,7 @@ import java.io.UncheckedIOException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -30,6 +28,7 @@ public class Crawl implements Closeable {
     final AtomicBoolean paused = new AtomicBoolean(true);
     final Pywb pywb;
     final CloseableHttpAsyncClient httpClient;
+    final ExternalArchive externalArchive;
 
     public Crawl(Config config, Database db) throws IOException {
         this.config = config;
@@ -43,6 +42,7 @@ public class Crawl implements Closeable {
         } catch (NoSuchAlgorithmException e) {
             throw new IOException(e);
         }
+        externalArchive = config.externalCdxUrl != null ? new ExternalArchive(config.externalCdxUrl) : null;
     }
 
     public synchronized Browser browser() {
@@ -134,5 +134,15 @@ public class Crawl implements Closeable {
         while (true) {
             step();
         }
+    }
+
+    public List<Visit> listVisits(Location location) {
+        List<Visit> visits = db.visits.list(location.originId, location.pathId);
+        if (externalArchive != null) {
+            visits = new ArrayList<>(visits);
+            visits.addAll(externalArchive.list(location.url.toString()));
+            visits.sort(Comparator.comparing((Visit v) -> v.date).reversed());
+        }
+        return visits;
     }
 }

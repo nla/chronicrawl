@@ -156,6 +156,9 @@ public class Config implements Iterable<Config.Entry> {
     @Section("Crawler")
     boolean newHttpClient = false;
 
+    @Section("External Archive")
+    String externalCdxUrl = null;
+
     /**
      * Digest algorithm to use when calculating payload digest
      */

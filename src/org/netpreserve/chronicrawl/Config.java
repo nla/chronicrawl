@@ -51,6 +51,12 @@ public class Config implements Iterable<Config.Entry> {
     String dbPassword = "";
 
     /**
+     * SQL queries that take this long will be logged.
+     */
+    @Section("Database")
+    long logSlowQueriesMillis = 5000;
+
+    /**
      * URL prefix for the UI.
      */
     @Section("User Interface")

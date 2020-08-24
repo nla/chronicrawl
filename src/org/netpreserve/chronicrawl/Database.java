@@ -9,6 +9,8 @@ import org.jdbi.v3.core.config.ConfigRegistry;
 import org.jdbi.v3.core.mapper.CaseStrategy;
 import org.jdbi.v3.core.mapper.MapMapper;
 import org.jdbi.v3.core.mapper.MapMappers;
+import org.jdbi.v3.core.statement.SqlLogger;
+import org.jdbi.v3.core.statement.StatementContext;
 import org.jdbi.v3.sqlobject.SqlObject;
 import org.jdbi.v3.sqlobject.SqlObjectPlugin;
 import org.jdbi.v3.sqlobject.config.KeyColumn;
@@ -18,14 +20,18 @@ import org.jdbi.v3.sqlobject.config.ValueColumn;
 import org.jdbi.v3.sqlobject.statement.SqlQuery;
 import org.jdbi.v3.sqlobject.statement.SqlUpdate;
 import org.netpreserve.jwarc.WarcDigest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sqlite.SQLiteConfig;
 
 import java.nio.ByteBuffer;
 import java.sql.*;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 public class Database implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(Database.class);
     private final HikariDataSource dataSource;
     public final IdGenerator ids = new IdGenerator(0); // TODO: claim unique nodeId
     public final ConfigDAO config;
@@ -40,11 +46,11 @@ public class Database implements AutoCloseable {
     public final WarcDAO warcs;
     final Jdbi jdbi;
 
-    Database(String url, String user, String password) {
-        var config = new HikariConfig();
-        config.setJdbcUrl(url);
-        config.setUsername(user);
-        config.setPassword(password);
+    Database(String url, String user, String password, Config config) {
+        var pool = new HikariConfig();
+        pool.setJdbcUrl(url);
+        pool.setUsername(user);
+        pool.setPassword(password);
 
         if (url.startsWith("jdbc:sqlite:")) {
             SQLiteConfig sqlite = new SQLiteConfig();
@@ -52,12 +58,12 @@ public class Database implements AutoCloseable {
             sqlite.setSharedCache(true);
             sqlite.setJournalMode(SQLiteConfig.JournalMode.WAL);
             sqlite.setSynchronous(SQLiteConfig.SynchronousMode.NORMAL);
-            config.setDataSourceProperties(sqlite.toProperties());
+            pool.setDataSourceProperties(sqlite.toProperties());
             // FIXME: need to figure out how to correctly deal with SQLITE_BUSY before we can enable concurrent access
-            config.setMaximumPoolSize(1);
+            pool.setMaximumPoolSize(1);
         }
 
-        dataSource = new HikariDataSource(config);
+        dataSource = new HikariDataSource(pool);
         this.jdbi = Jdbi.create(dataSource);
         jdbi.getConfig(MapMappers.class).setCaseChange(CaseStrategy.NOP);
         jdbi.installPlugin(new SqlObjectPlugin());
@@ -79,6 +85,15 @@ public class Database implements AutoCloseable {
         jdbi.registerArgument(new AbstractArgumentFactory<UUID>(Types.VARBINARY) {
             protected Argument build(UUID value, ConfigRegistry config) {
                 return (i, stmt, ctx) -> stmt.setBytes(i, toBytes(value));
+            }
+        });
+        jdbi.setSqlLogger(new SqlLogger() {
+            @Override
+            public void logAfterExecution(StatementContext ctx) {
+                long elapsedMillis = ctx.getElapsedTime(ChronoUnit.MILLIS);
+                if (config.logSlowQueriesMillis >= 0 && elapsedMillis >= config.logSlowQueriesMillis) {
+                    log.warn("Slow SQL ({} ms): {} {}", elapsedMillis, ctx.getRawSql(), ctx.getBinding());
+                }
             }
         });
 

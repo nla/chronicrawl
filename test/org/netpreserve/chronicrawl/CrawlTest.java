@@ -32,9 +32,9 @@ public class CrawlTest {
     }
 
     private void test(String dbUrl) throws IOException {
-        try (Database db = new Database(dbUrl, "sa", "")) {
+        Config config = new Config();
+        try (Database db = new Database(dbUrl, "sa", "", config)) {
             db.init();
-            Config config = new Config();
             config.maxDelayMillis = 0;
             try (Crawl crawl = new Crawl(config, db)) {
                 crawl.addSeed(testServer.url() + "/");

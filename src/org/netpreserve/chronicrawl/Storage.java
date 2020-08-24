@@ -195,6 +195,8 @@ public class Storage implements Closeable {
                     httpHeader = new Scanner(body, ISO_8859_1).useDelimiter(Pattern.compile("\r?\n\r?\n")).next();
                 }
             }
+        } catch (NoSuchFileException e) {
+            return e.toString();
         }
         return warcHeader + "\r\n\r\n" + httpHeader;
     }

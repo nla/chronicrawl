@@ -9,6 +9,7 @@ public class Chronicrawl {
     public static void main(String[] args) throws IOException {
         List<String> seeds = new ArrayList<>();
         boolean initDb = false;
+        boolean unpause = false;
         Config config = new Config();
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -22,11 +23,15 @@ public class Chronicrawl {
                     System.out.println("-c, --config FILE  Load config from properties file");
                     System.out.println("-h, --help         Print this help");
                     System.out.println("    --init         (Re-)initialize database (DELETES EXISTING DATA)");
+                    System.out.println("-u, --unpause      Unpause on startup");
                     System.out.println("    --version      Print version number");
                     System.exit(0);
                     break;
                 case "--init":
                     initDb = true;
+                    break;
+                case "--unpause":
+                case "-u":
                     break;
                 case "--version":
                     System.out.println(Config.version());

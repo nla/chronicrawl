@@ -416,6 +416,25 @@ public class Database implements AutoCloseable {
                 "ORDER BY v.date DESC LIMIT ?")
         @RegisterRowMapper(MapMapper.class)
         List<Map<String, Object>> paginateCrawlLogPagesOnly(Instant after, int limit);
+
+        @SqlQuery("SELECT ROUND(date / :intervalMillis) * :intervalMillis AS millis, COUNT(*) AS visits, " +
+                "SUM(response_length) AS bytes FROM visit " +
+                "WHERE date >= :start AND date <= :end " +
+                "GROUP BY millis")
+        @RegisterConstructorMapper(Metric.class)
+        List<Metric> metrics(Instant start, Instant end, long intervalMillis);
+    }
+
+    public static class Metric {
+        public final long millis;
+        public final long visits;
+        public final long bytes;
+
+        public Metric(long millis, long visits, long bytes) {
+            this.millis = millis;
+            this.visits = visits;
+            this.bytes = bytes;
+        }
     }
 
     @RegisterConstructorMapper(Screenshot.class)

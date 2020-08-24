@@ -7,6 +7,8 @@ import fi.iki.elonen.NanoHTTPD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.xml.stream.XMLOutputFactory;
+import javax.xml.stream.XMLStreamWriter;
 import java.io.*;
 import java.net.*;
 import java.nio.channels.Channels;
@@ -47,6 +49,7 @@ public class Webapp extends NanoHTTPD implements Closeable {
         this.db = crawl.db;
         this.contextPath = crawl.config.uiContextPath.replaceFirst("/+$", "");
         start();
+        log.info("Started Chronicrawl web interface on " + port);
     }
 
     public synchronized JsonObject oidcConfig() {
@@ -414,6 +417,71 @@ public class Webapp extends NanoHTTPD implements Closeable {
                     requireRole("admin");
                     db.schedules.delete(paramLong("id"));
                     return seeOther(contextPath + "/settings/schedules", "Schedule deleted.");
+                }
+                case "GET /metrics.svg": {
+                    requireRole("admin");
+
+                    Instant start = Instant.now().minusSeconds(15 * 60);
+                    Instant end = Instant.now();
+
+                    long startMillis = start.toEpochMilli();
+                    long endMillis = end.toEpochMilli();
+                    long intervalMillis = (endMillis - startMillis) / 300;
+                    int ticks = (int)((endMillis - startMillis) / intervalMillis);
+
+                    long[] values = new long[ticks];
+
+                    List<Database.Metric> metrics = db.visits.metrics(start, end, intervalMillis);
+                    for (var metric : metrics) {
+                        values[(int)((metric.millis - startMillis) / intervalMillis)] = metric.bytes;
+                    }
+                    var stats = Arrays.stream(values).summaryStatistics();
+
+                    int chartHeight = 100;
+                    int chartWidth = 800;
+                    long max = stats.getMax();
+                    if (max == 0) max = 1;
+
+                    StringWriter sw = new StringWriter();
+                    XMLStreamWriter xml = XMLOutputFactory.newDefaultFactory().createXMLStreamWriter(sw);
+                    xml.writeStartDocument("UTF-8", "1.0");
+                    xml.writeStartElement("svg");
+                    xml.writeAttribute("xmlns", "http://www.w3.org/2000/svg");
+                    int x = 0;
+                    int barWidth = chartWidth / ticks;
+                    for (int i = 0; i < values.length; i++) {
+                        int barHeight = (int)(values[i] * chartHeight / max);
+                        int y = chartHeight - barHeight;
+                        if (barHeight > 0) {
+                            xml.writeEmptyElement("rect");
+                            xml.writeAttribute("fill", "#66f");
+                            xml.writeAttribute("x", Integer.toString(x));
+                            xml.writeAttribute("y", Integer.toString(y));
+                            xml.writeAttribute("width", Integer.toString(barWidth));
+                            xml.writeAttribute("height", Integer.toString(barHeight));
+                            xml.writeCharacters("\n");
+                        }
+                        x += barWidth;
+                    }
+
+                    int textHeight = 16;
+                    xml.writeStartElement("text");
+                    xml.writeAttribute("x", Integer.toString(chartWidth));
+                    xml.writeAttribute("y", Integer.toString(textHeight));
+                    xml.writeCharacters(max / 1024 + " KB");
+                    xml.writeEndElement();
+
+                    xml.writeStartElement("text");
+                    xml.writeAttribute("x", Integer.toString(chartWidth));
+                    xml.writeAttribute("y", Integer.toString(chartHeight));
+                    xml.writeCharacters("0 KB");
+                    xml.writeEndElement();
+
+                    xml.writeEndElement();
+                    xml.writeEndDocument();
+                    return newFixedLengthResponse(OK, "image/svg+xml", sw.toString());
+
+
                 }
                 case "GET /visit": {
                     requireRole("admin");

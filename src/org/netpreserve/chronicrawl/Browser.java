@@ -2,7 +2,6 @@ package org.netpreserve.chronicrawl;
 
 import com.grack.nanojson.*;
 import org.java_websocket.client.WebSocketClient;
-import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ServerHandshake;
 import org.netpreserve.jwarc.WarcResponse;
 import org.slf4j.Logger;
@@ -22,6 +21,7 @@ public class Browser implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(Browser.class);
     private static final List<String> executables = List.of("chromium-browser", "chromium", "google-chrome",
             "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe");
+    private static final Set<Process> allProcesses = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final Process process;
     private final WebSocket websocket;
     private final AtomicLong idSeq = new AtomicLong(0);
@@ -29,6 +29,21 @@ public class Browser implements Closeable {
     private final Map<Long, CompletableFuture<JsonObject>> calls = new ConcurrentHashMap<>();
     private final ScheduledThreadPoolExecutor scheduledExecutor = new ScheduledThreadPoolExecutor(1);
 
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            for (Process child: allProcesses) {
+                child.destroy();
+            }
+            for (Process child: allProcesses) {
+                try {
+                    child.waitFor(1, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    // whatever
+                }
+                child.destroyForcibly();
+            }
+        }, "Browser shutdown hook"));
+    }
     public Browser() throws IOException {
         scheduledExecutor.setRemoveOnCancelPolicy(true);
         Process process = null;
@@ -49,6 +64,7 @@ public class Browser implements Closeable {
             break;
         }
         if (process == null) throw new IOException("Couldn't execute any of: " + executables);
+        allProcesses.add(process);
         this.process = process;
         String url = readDevtoolsUrlFromStderr();
         log.trace("Connecting to {}", url);
@@ -194,7 +210,11 @@ public class Browser implements Closeable {
 
     public void close() {
         scheduledExecutor.shutdown();
-        websocket.close();
+        try {
+            websocket.close();
+        } catch (Exception e) {
+            // ignore
+        }
         process.destroy();
         try {
             process.waitFor(1, TimeUnit.SECONDS);
@@ -202,6 +222,7 @@ public class Browser implements Closeable {
             // uh
         } finally {
             process.destroyForcibly();
+            allProcesses.remove(process);
         }
     }
 

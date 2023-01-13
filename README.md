@@ -5,7 +5,7 @@ continuous crawling and mixing of browser-based crawling with traditional link e
 
 ## Status
 
-Chronicrawl is at an early stage of development but is (barely) usable for basic crawling functions.
+**Current unmaintained. May or may not be revisited in future.** Chronicrawl is very rough around the edges but (barely) usable for basic crawling functions. It's likely not compatible with the latest version of Chromium.
 
 <img height=128px src="https://user-images.githubusercontent.com/10588/82002093-d79f7080-9697-11ea-9ae7-8049e54e2dae.png"> <img height=128px src="https://user-images.githubusercontent.com/10588/82002097-da9a6100-9697-11ea-954d-57590df1abe2.png"> <img height=128px src="https://user-images.githubusercontent.com/10588/82001920-4defa300-9697-11ea-9ef0-d1a11b3a815f.png">
 
